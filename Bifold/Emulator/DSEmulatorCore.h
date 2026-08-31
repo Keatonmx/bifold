@@ -137,6 +137,24 @@ typedef NS_ENUM(NSInteger, DSMicMode) {
 /// YES while the emulated pak's motor should be spinning.
 @property (nonatomic, readonly) BOOL rumbleActive;
 
+#pragma mark - DSi
+
+/// Boot in DSi mode on the next ROM load. Needs the user's own dumps in the
+/// system folder: bios7.bin, bios9.bin, firmware.bin, bios7i.bin,
+/// bios9i.bin, nand.bin. Falls back to DS mode when anything is missing.
+@property (nonatomic) BOOL dsiModeEnabled;
+/// YES when the running console actually booted as a DSi.
+@property (nonatomic, readonly) BOOL consoleIsDSi;
+/// Required DSi files not found in the system folder (empty = ready).
++ (NSArray<NSString *> *)missingDSiFiles;
+
+/// Bit 0 = outer camera, bit 1 = inner. While nonzero the session feeds
+/// phone camera frames in.
+@property (nonatomic, readonly) NSInteger cameraActiveMask;
+/// Latest phone frame, BGRA (iOS capture layout), any size; converted and
+/// scaled to the DSi's 640×480 YUY2. Any thread.
+- (void)submitCameraFrameBGRA:(const uint32_t *)pixels width:(NSInteger)width height:(NSInteger)height;
+
 #pragma mark - Audio
 
 /// Fixed 48 kHz: the core resamples its own mixer output.

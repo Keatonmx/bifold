@@ -201,6 +201,10 @@ struct AppSettings: Codable, Equatable {
     /// Placing the phone face down closes the lid (DS sleep mode).
     var faceDownSleep: Bool = true
 
+    // System
+    /// Boot as a DSi when the six system files are present (see Settings).
+    var dsiEnabled: Bool = false
+
     // Library
     var librarySort: LibrarySort = .recent
     var hiddenGameIDs: [String] = []
@@ -241,6 +245,7 @@ struct AppSettings: Codable, Equatable {
         realMicEnabled = try c.decodeIfPresent(Bool.self, forKey: .realMicEnabled) ?? d.realMicEnabled
         rumblePakEnabled = try c.decodeIfPresent(Bool.self, forKey: .rumblePakEnabled) ?? d.rumblePakEnabled
         faceDownSleep = try c.decodeIfPresent(Bool.self, forKey: .faceDownSleep) ?? d.faceDownSleep
+        dsiEnabled = try c.decodeIfPresent(Bool.self, forKey: .dsiEnabled) ?? d.dsiEnabled
         librarySort = try c.decodeIfPresent(LibrarySort.self, forKey: .librarySort) ?? d.librarySort
         hiddenGameIDs = try c.decodeIfPresent([String].self, forKey: .hiddenGameIDs) ?? []
         lastPlayedGameID = try c.decodeIfPresent(String.self, forKey: .lastPlayedGameID)

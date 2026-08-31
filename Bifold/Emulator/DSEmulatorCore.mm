@@ -14,15 +14,19 @@
 #include "GBACart.h"
 #include "NDS_Header.h"
 #include "Args.h"
+#include "DSi.h"
+#include "DSi_NAND.h"
 #include "GPU.h"
 #include "GPU3D_Soft.h"
 #include "SPU.h"
 #include "SPI.h"
+#include "SPI_Firmware.h"
 #include "RTC.h"
 #include "Savestate.h"
 #include "Platform.h"
 #include "version.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 
@@ -33,6 +37,34 @@ static NSString* const BifoldErrorDomain = @"com.redfernsoutpost.bifold.emulator
 static const NSUInteger kScreenWidth = 256;
 static const NSUInteger kScreenHeight = 192;
 static const double kOutputSampleRate = 48000.0;
+
+static NSArray<NSString *>* const kDSiFileNames = @[
+    @"bios7.bin", @"bios9.bin", @"firmware.bin",
+    @"bios7i.bin", @"bios9i.bin", @"nand.bin"
+];
+
+/// Reads an exact-size system file (BIOS image) into a fixed array.
+template <size_t N>
+static bool LoadSystemImage(const char* name, std::array<u8, N>& out)
+{
+    std::string path = BifoldPlatform::SystemDirectory + "/" + name;
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    size_t got = fread(out.data(), 1, N, f);
+    fclose(f);
+    return got == N;
+}
+
+/// Base NDSArgs shared by both console types (interpreter, 48 kHz audio).
+static NDSArgs MakeBaseArgs()
+{
+    NDSArgs args {};
+    args.JIT = std::nullopt;                     // no executable memory on iOS
+    args.Interpolation = AudioInterpolation::Linear;
+    args.OutputSampleRate = kOutputSampleRate;
+    args.GDB = std::nullopt;
+    return args;
+}
 
 @implementation DSEmulatorCore {
     NDS* _nds;
@@ -46,6 +78,7 @@ static const double kOutputSampleRate = 48000.0;
     uint32_t _frameCounter;
     int _lastSaveWrites;
     BOOL _reportedStop;
+    BOOL _consoleIsDSi;
 }
 
 - (instancetype)initWithSaveDirectory:(NSURL *)saveDirectory
@@ -78,18 +111,94 @@ static const double kOutputSampleRate = 48000.0;
     }
 }
 
-/// Builds a fresh console: FreeBIOS, generated firmware, interpreter CPU,
-/// threaded software rasteriser, 48 kHz resampled audio.
+/// Builds a fresh console. DSi when enabled and all six system files parse;
+/// otherwise a DS — with the user's real BIOS/firmware if they dropped them
+/// into the system folder, FreeBIOS + generated firmware if not. Both get
+/// the interpreter CPU, threaded software rasteriser and 48 kHz audio.
 - (void)createConsole {
     [self destroyConsole];
-    NDSArgs args {};
-    args.JIT = std::nullopt;                     // no executable memory on iOS
-    args.Interpolation = AudioInterpolation::Linear;
-    args.OutputSampleRate = kOutputSampleRate;
-    args.GDB = std::nullopt;
-    _nds = new NDS(std::move(args), _state);
+    _consoleIsDSi = NO;
+    _state->camActiveMask.store(0);
+    _state->camHasFrame.store(false);
+
+    if (self.dsiModeEnabled && DSEmulatorCore.missingDSiFiles.count == 0 && [self createDSiConsole]) {
+        _consoleIsDSi = YES;
+    } else {
+        NDSArgs args = MakeBaseArgs();
+        auto arm9 = std::make_unique<ARM9BIOSImage>();
+        auto arm7 = std::make_unique<ARM7BIOSImage>();
+        if (LoadSystemImage("bios9.bin", *arm9) && LoadSystemImage("bios7.bin", *arm7)) {
+            args.ARM9BIOS = std::move(arm9);
+            args.ARM7BIOS = std::move(arm7);
+            if (Platform::FileHandle* f = Platform::OpenLocalFile("firmware.bin", Platform::FileMode::Read)) {
+                Firmware firmware(f);
+                Platform::CloseFile(f);
+                if (firmware.Buffer()) {
+                    args.Firmware = std::move(firmware);
+                }
+            }
+        }
+        _nds = new NDS(std::move(args), _state);
+    }
+
     auto& renderer = static_cast<SoftRenderer&>(_nds->GetRenderer3D());
     renderer.SetThreaded(true, _nds->GPU);
+}
+
+/// DSi: real DS BIOS + DSi firmware + the i-BIOSes + NAND, all user-supplied.
+/// Returns NO (leaving `_nds` null) if anything fails to load or parse.
+- (BOOL)createDSiConsole {
+    NDSArgs args = MakeBaseArgs();
+
+    auto arm9 = std::make_unique<ARM9BIOSImage>();
+    auto arm7 = std::make_unique<ARM7BIOSImage>();
+    if (!LoadSystemImage("bios9.bin", *arm9) || !LoadSystemImage("bios7.bin", *arm7)) return NO;
+    args.ARM9BIOS = std::move(arm9);
+    args.ARM7BIOS = std::move(arm7);
+
+    Platform::FileHandle* firmwareFile = Platform::OpenLocalFile("firmware.bin", Platform::FileMode::Read);
+    if (!firmwareFile) return NO;
+    Firmware firmware(firmwareFile);
+    Platform::CloseFile(firmwareFile);
+    if (!firmware.Buffer()) return NO;
+    args.Firmware = std::move(firmware);
+
+    auto arm9i = std::make_unique<DSiBIOSImage>();
+    auto arm7i = std::make_unique<DSiBIOSImage>();
+    if (!LoadSystemImage("bios9i.bin", *arm9i) || !LoadSystemImage("bios7i.bin", *arm7i)) return NO;
+    // Not doing the full BIOS boot: patch the reset vectors, as the
+    // reference frontend does.
+    *(u32*)arm9i->data() = 0xEAFFFFFE;
+    *(u32*)arm7i->data() = 0xEAFFFFFE;
+
+    Platform::FileHandle* nandFile = Platform::OpenLocalFile("nand.bin", Platform::FileMode::ReadWriteExisting);
+    if (!nandFile) return NO;
+    DSi_NAND::NANDImage nand(nandFile, &(*arm7i)[0x8308]);
+    if (!nand) return NO;   // the NANDImage owns the file handle
+
+    DSiArgs dsiArgs {
+        std::move(args),
+        std::move(arm9i),
+        std::move(arm7i),
+        std::move(nand),
+        std::nullopt,        // no emulated SD card in v1
+        false,               // FullBIOSBoot
+        false,               // DSPHLE off: teakra, the accurate DSP
+    };
+    _nds = new DSi(std::move(dsiArgs), _state);
+    return YES;
+}
+
++ (NSArray<NSString *> *)missingDSiFiles {
+    if (BifoldPlatform::SystemDirectory.empty()) return kDSiFileNames;
+    NSString* base = [NSString stringWithUTF8String:BifoldPlatform::SystemDirectory.c_str()];
+    NSMutableArray<NSString *>* missing = [NSMutableArray array];
+    for (NSString* name in kDSiFileNames) {
+        if (![NSFileManager.defaultManager fileExistsAtPath:[base stringByAppendingPathComponent:name]]) {
+            [missing addObject:name];
+        }
+    }
+    return missing;
 }
 
 /// Reset + direct boot + start, shared by loadROM and reset.
@@ -330,6 +439,52 @@ static const double kOutputSampleRate = 48000.0;
 - (BOOL)rumbleActive {
     uint64_t until = _state->rumbleUntilUS.load();
     return until != 0 && Platform::GetUSCount() < until;
+}
+
+#pragma mark - DSi
+
+- (BOOL)consoleIsDSi {
+    return _consoleIsDSi;
+}
+
+- (NSInteger)cameraActiveMask {
+    return _state->camActiveMask.load();
+}
+
+- (void)submitCameraFrameBGRA:(const uint32_t *)pixels width:(NSInteger)width height:(NSInteger)height {
+    if (!pixels || width < 2 || height < 1) return;
+    const int dw = BifoldCoreState::CamWidth;
+    const int dh = BifoldCoreState::CamHeight;
+    std::lock_guard<std::mutex> lock(_state->camLock);
+    // Scale + RGB→YUY2, after the reference frontend's converter. BGRA bytes
+    // little-endian are 0xAARRGGBB words, exactly the layout the maths wants.
+    for (int dy = 0; dy < dh; dy++) {
+        int sy = (int)((dy * height) / dh);
+        for (int dx = 0; dx < dw; dx += 2) {
+            uint32_t pixel1 = pixels[sy * width + (dx * width) / dw];
+            uint32_t pixel2 = pixels[sy * width + ((dx + 1) * width) / dw];
+
+            int r1 = (pixel1 >> 16) & 0xFF, g1 = (pixel1 >> 8) & 0xFF, b1 = pixel1 & 0xFF;
+            int r2 = (pixel2 >> 16) & 0xFF, g2 = (pixel2 >> 8) & 0xFF, b2 = pixel2 & 0xFF;
+
+            int y1 = ((r1 * 19595) + (g1 * 38470) + (b1 * 7471)) >> 16;
+            int u1 = ((b1 - y1) * 32244) >> 16;
+            int v1 = ((r1 - y1) * 57475) >> 16;
+            int y2 = ((r2 * 19595) + (g2 * 38470) + (b2 * 7471)) >> 16;
+            int u2 = ((b2 - y2) * 32244) >> 16;
+            int v2 = ((r2 - y2) * 57475) >> 16;
+
+            u1 += 128; v1 += 128;
+            u2 += 128; v2 += 128;
+            y1 = std::clamp(y1, 0, 255); u1 = std::clamp(u1, 0, 255); v1 = std::clamp(v1, 0, 255);
+            y2 = std::clamp(y2, 0, 255); u2 = std::clamp(u2, 0, 255); v2 = std::clamp(v2, 0, 255);
+            u1 = (u1 + u2) >> 1;
+            v1 = (v1 + v2) >> 1;
+
+            _state->camFrame[(dy * dw + dx) / 2] = (uint32_t)(y1 | (u1 << 8) | (y2 << 16) | (v1 << 24));
+        }
+    }
+    _state->camHasFrame.store(true);
 }
 
 #pragma mark - Video

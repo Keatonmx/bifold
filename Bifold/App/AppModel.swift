@@ -253,6 +253,9 @@ final class AppModel: ObservableObject {
         selectedGame = nil
         screen = .game
         session.start()
+        if settings.dsiEnabled && !session.bootedAsDSi {
+            showToast("DSi files incomplete · booted as a DS")
+        }
 
         // Auto-suspend recovery: if the app was killed mid-session, resume it.
         let suspend = FileLocations.suspendState(gameID: game.id)

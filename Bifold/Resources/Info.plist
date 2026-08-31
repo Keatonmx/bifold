@@ -27,6 +27,10 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 
+	<!-- Only used when a DSi game turns its cameras on (DSi mode). -->
+	<key>NSCameraUsageDescription</key>
+	<string>DSi games with cameras see through the phone's cameras. Frames go straight to the emulated console and are never uploaded or stored.</string>
+
 	<!-- Only used when Real Microphone is turned on in Settings. -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Games that listen for blowing or talking hear the phone's microphone. Sound goes straight to the emulated console and is never recorded or stored.</string>

@@ -13,6 +13,7 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 #include <string>
 
 struct BifoldCoreState {
@@ -45,6 +46,17 @@ struct BifoldCoreState {
     /// Slot-2 Rumble Pak: microsecond deadline (Platform::GetUSCount clock)
     /// until which the motor spins; 0 = off.
     std::atomic<uint64_t> rumbleUntilUS { 0 };
+
+    /// DSi cameras. The bridge stores the latest phone frame as 640×480 YUY2
+    /// (w*h/2 words, y1|u<<8|y2<<16|v<<24); Camera_CaptureFrame copies it out
+    /// under the lock. Bit 0 of `camActiveMask` = outer camera (0), bit 1 =
+    /// inner (1); the session polls it to run the phone camera.
+    static constexpr int CamWidth = 640;
+    static constexpr int CamHeight = 480;
+    std::atomic<int> camActiveMask { 0 };
+    std::mutex camLock;
+    uint32_t camFrame[CamWidth * CamHeight / 2] = {};
+    std::atomic<bool> camHasFrame { false };
 };
 
 namespace BifoldPlatform {

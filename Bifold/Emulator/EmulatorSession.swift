@@ -102,6 +102,9 @@ final class EmulationRunner: NSObject, @unchecked Sendable {
     var onSaveData: (() -> Void)?
     /// Fired when the emulated console stops itself (emulation thread).
     var onConsoleStopped: ((DSStopReason) -> Void)?
+    /// Fired when the DSi wants a different camera state (emulation thread).
+    var onCameraMaskChanged: ((Int) -> Void)?
+    private var lastCameraMask = 0
 
     init(core: DSEmulatorCore, audio: AudioEngine) {
         self.core = core
@@ -198,10 +201,15 @@ final class EmulationRunner: NSObject, @unchecked Sendable {
             bottomStore.publish(from: bottomScratch)
         }
         let rumbling = core.rumbleActive
+        let cameraMask = Int(core.cameraActiveMask)
         lock.unlock()
         if rumbling != wasRumbling {
             wasRumbling = rumbling
             rumble.setRumbling(rumbling)
+        }
+        if cameraMask != lastCameraMask {
+            lastCameraMask = cameraMask
+            onCameraMaskChanged?(cameraMask)
         }
     }
 
@@ -263,6 +271,7 @@ final class EmulatorSession: ObservableObject {
     var audio: AudioEngine { runner.audio }
     private let thread: EmulationThread
     private let micMonitor = MicMonitor()
+    private let dsiCamera = DSiCameraFeed()
     private var cancellables = Set<AnyCancellable>()
 
     var settings: AppSettings { didSet { applySettings() } }
@@ -295,6 +304,22 @@ final class EmulatorSession: ObservableObject {
             core.submitMicSamples(samples, count: UInt(count))
         }
 
+        // DSi cameras: the emulated console asks, the phone camera answers.
+        dsiCamera.onFrame = { pixels, width, height in
+            core.submitCameraFrameBGRA(pixels, width: width, height: height)
+        }
+        runner.onCameraMaskChanged = { [weak self] mask in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if mask == 0 {
+                    self.dsiCamera.stop()
+                } else {
+                    // Inner (front) camera wins when a game somehow wants both.
+                    self.dsiCamera.start(front: mask & 2 != 0)
+                }
+            }
+        }
+
         applySettings()
     }
 
@@ -304,8 +329,10 @@ final class EmulatorSession: ObservableObject {
         stop()
         foldShown = false
         let rumblePak = settings.rumblePakEnabled
+        let dsi = settings.dsiEnabled
         try runner.withCore { core in
             core.insertRumblePak = rumblePak
+            core.dsiModeEnabled = dsi
             try core.loadROM(at: game.romURL)
         }
         self.game = game
@@ -351,6 +378,9 @@ final class EmulatorSession: ObservableObject {
         if settings.realMicEnabled { micMonitor.start() }
     }
 
+    /// Whether the loaded console actually booted as a DSi.
+    var bootedAsDSi: Bool { runner.core.consoleIsDSi }
+
     /// Stops emulation and unloads the ROM (the battery save is flushed).
     func stop() {
         stopBookmarkTimer()
@@ -362,6 +392,7 @@ final class EmulatorSession: ObservableObject {
         lidClosed = false
         runner.stopRumble()
         micMonitor.stop()
+        dsiCamera.stop()
         audio.stop()
         runner.withCore { $0.unloadROM() }
         game = nil

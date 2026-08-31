@@ -136,6 +136,17 @@ struct SettingsSheet: View {
                     }
                 }
 
+                section("System") {
+                    Card {
+                        SettingsRow(title: "DSi mode", subtitle: dsiStatus) {
+                            BifoldToggle(isOn: $model.settings.dsiEnabled)
+                        }
+                        SettingsRow(title: "System folder", subtitle: "Bifold › System, in the Files app", showsSeparator: false) {
+                            Text("bios · firmware · nand").font(Typography.meta).foregroundColor(Palette.text40)
+                        }
+                    }
+                }
+
                 section("Library") {
                     Card {
                         NavRow(title: "Import ROMs", subtitle: "Copy .nds files into the library") {
@@ -155,6 +166,13 @@ struct SettingsSheet: View {
 
             } }
         }
+    }
+
+    /// "Ready · applies at next boot" or the list of missing dumps.
+    private var dsiStatus: String {
+        let missing = DSEmulatorCore.missingDSiFiles()
+        if missing.isEmpty { return "Ready · applies at next boot" }
+        return "Missing: \(missing.joined(separator: ", "))"
     }
 
     @ViewBuilder

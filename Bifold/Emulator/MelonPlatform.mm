@@ -364,11 +364,55 @@ u16 MP_RecvReplies(u8*, u64, u16, void*) { return 0; }
 int Net_SendPacket(u8*, int, void*) { return 0; }
 int Net_RecvPacket(u8*, void*) { return 0; }
 
-// ---------------------------------------------------------------- camera (DSi only; stub)
+// ---------------------------------------------------------------- camera (DSi)
 
-void Camera_Start(int, void*) {}
-void Camera_Stop(int, void*) {}
-void Camera_CaptureFrame(int, u32*, int, int, bool, void*) {}
+void Camera_Start(int num, void* userdata)
+{
+    if (auto* state = static_cast<BifoldCoreState*>(userdata))
+        state->camActiveMask.fetch_or(1 << num);
+}
+
+void Camera_Stop(int num, void* userdata)
+{
+    if (auto* state = static_cast<BifoldCoreState*>(userdata))
+        state->camActiveMask.fetch_and(~(1 << num));
+}
+
+void Camera_CaptureFrame(int num, u32* frame, int width, int height, bool yuv, void* userdata)
+{
+    auto* state = static_cast<BifoldCoreState*>(userdata);
+    const int camW = BifoldCoreState::CamWidth;
+    const int camH = BifoldCoreState::CamHeight;
+    if (!state || !yuv || width <= 0 || height <= 0)
+    {
+        // The DSi camera module always transfers YUV; anything else gets black.
+        if (frame && width > 0 && height > 0)
+            memset(frame, 0, (size_t)(width * height) * (yuv ? 2 : 4));
+        return;
+    }
+    std::lock_guard<std::mutex> lock(state->camLock);
+    if (!state->camHasFrame.load())
+    {
+        memset(frame, 0, (size_t)(width * height) * 2);
+        return;
+    }
+    if (width == camW && height == camH)
+    {
+        memcpy(frame, state->camFrame, (size_t)(camW * camH / 2) * sizeof(u32));
+        return;
+    }
+    // Nearest-neighbour scale in YUY2 pairs (after the reference frontend).
+    const int sw = camW / 2, dw = width / 2;
+    for (int dy = 0; dy < height; dy++)
+    {
+        int sy = (dy * camH) / height;
+        for (int dx = 0; dx < dw; dx++)
+        {
+            int sx = (dx * sw) / dw;
+            frame[dy * dw + dx] = state->camFrame[sy * sw + sx];
+        }
+    }
+}
 
 // ---------------------------------------------------------------- microphone
 
