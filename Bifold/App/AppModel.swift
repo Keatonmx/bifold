@@ -94,6 +94,11 @@ final class AppModel: ObservableObject {
         // `-bifold-theme <Name>`, `-bifold-sheet <name>`, `-bifold-sections A,B`,
         // `-bifold-autoplay`, `-bifold-landscape`, `-bifold-swap`.
         let args = CommandLine.arguments
+        // CI passes -bifold-reset on every launch so screenshot runs never
+        // inherit settings a previous shot's arguments persisted.
+        if args.contains("-bifold-reset") {
+            self.settings = AppSettings()
+        }
         if let i = args.firstIndex(of: "-bifold-theme"), i + 1 < args.count, let t = ThemeName(rawValue: args[i + 1]) {
             self.settings.theme = t
         }

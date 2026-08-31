@@ -106,6 +106,9 @@ struct PortraitGameView: View {
                                   anchor: .top, perspective: 0.5)
         }
         .frame(width: width)
+        // Without this the VStack splits height with the greedy controls
+        // area and quietly shrinks the screens below their computed size.
+        .fixedSize(horizontal: false, vertical: true)
         .opacity(unfolded ? 1 : 0.35)
         .frame(maxWidth: .infinity)
         .padding(.top, 6)

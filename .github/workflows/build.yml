@@ -91,7 +91,7 @@ jobs:
           shot() {
             local name="$1"; shift
             xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-            xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@" > "screenshots/launch-$name.log" 2>&1
+            xcrun simctl launch "$UDID" "$BUNDLE_ID" -bifold-reset "$@" > "screenshots/launch-$name.log" 2>&1
             sleep "${SHOT_DELAY:-8}"
             xcrun simctl io "$UDID" screenshot "screenshots/$name.png"
           }
