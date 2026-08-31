@@ -217,7 +217,7 @@ extension EmulationRunner: DSEmulatorCoreDelegate {
         onSaveData?()
     }
 
-    func emulatorCore(_ core: DSEmulatorCore, didStopWithReason reason: DSStopReason) {
+    func emulatorCore(_ core: DSEmulatorCore, didStopWith reason: DSStopReason) {
         onConsoleStopped?(reason)
     }
 }
