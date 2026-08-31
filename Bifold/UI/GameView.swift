@@ -32,6 +32,7 @@ struct GameContainerView: View {
 /// One DS screen with its frame store; the touch screen also catches the stylus.
 private struct DSScreenView: View {
     @EnvironmentObject private var session: EmulatorSession
+    @EnvironmentObject private var model: AppModel
     let store: FrameStore
     let filter: ScreenFilter
     let isTouchScreen: Bool
@@ -44,9 +45,9 @@ private struct DSScreenView: View {
             .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(Palette.hairline06, lineWidth: 1))
             .overlay {
                 if isTouchScreen {
-                    TouchScreenCatcher { point in
-                        session.setStylus(point)
-                    }
+                    TouchScreenCatcher(onStylus: { point in session.setStylus(point) },
+                                       offsetDSPixels: model.settings.stylusOffset.dsPixels,
+                                       showsCursor: model.settings.stylusCursor)
                 }
             }
     }
@@ -69,8 +70,10 @@ struct PortraitGameView: View {
     var body: some View {
         GeometryReader { geo in
             let gap = model.settings.screenGap.points
-            // Screens fit the width unless the controls would be squeezed.
-            let maxByHeight = (geo.size.height - 52 - minControlsHeight - gap - 30) / 1.5
+            // Screens fit the width unless the controls would be squeezed. With
+            // a focused layout one screen shrinks, so the base width can grow.
+            let available = geo.size.height - 52 - minControlsHeight - gap - 30
+            let maxByHeight = available / model.settings.portraitLayout.totalHeightFactor
             let screenWidth = max(200, min(geo.size.width - 20, maxByHeight))
             VStack(spacing: 0) {
                 topBar
@@ -109,15 +112,22 @@ struct PortraitGameView: View {
 
     private func screenBand(width: CGFloat, gap: CGFloat) -> some View {
         let swap = model.settings.swapScreens
+        let layout = model.settings.portraitLayout
+        // Which role each display slot shows, and how wide it is (a focused
+        // layout gives the emphasised role the full width).
+        let slot1IsTouch = swap
+        let slot2IsTouch = !swap
         return VStack(spacing: gap) {
-            DSScreenView(store: swap ? session.bottomStore : session.topStore,
+            DSScreenView(store: slot1IsTouch ? session.bottomStore : session.topStore,
                          filter: model.settings.filter,
-                         isTouchScreen: swap)
+                         isTouchScreen: slot1IsTouch)
+                .frame(width: width * layout.fraction(isTouchScreen: slot1IsTouch))
                 .rotation3DEffect(.degrees(unfolded ? 0 : -68), axis: (x: 1, y: 0, z: 0),
                                   anchor: .bottom, perspective: 0.5)
-            DSScreenView(store: swap ? session.topStore : session.bottomStore,
+            DSScreenView(store: slot2IsTouch ? session.bottomStore : session.topStore,
                          filter: model.settings.filter,
-                         isTouchScreen: !swap)
+                         isTouchScreen: slot2IsTouch)
+                .frame(width: width * layout.fraction(isTouchScreen: slot2IsTouch))
                 .rotation3DEffect(.degrees(unfolded ? 0 : 68), axis: (x: 1, y: 0, z: 0),
                                   anchor: .top, perspective: 0.5)
         }

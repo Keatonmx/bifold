@@ -54,6 +54,48 @@ enum SpeedSteps {
     }
 }
 
+/// Portrait screen sizing: even, or one screen dominant for precision.
+enum PortraitLayout: String, CaseIterable, Codable, Identifiable {
+    case balanced = "Even"
+    case touchFocus = "Touch big"
+    case topFocus = "Top big"
+    var id: String { rawValue }
+
+    /// Width fraction for a screen, by role.
+    func fraction(isTouchScreen: Bool) -> CGFloat {
+        switch self {
+        case .balanced: return 1
+        case .touchFocus: return isTouchScreen ? 1 : 0.58
+        case .topFocus: return isTouchScreen ? 0.58 : 1
+        }
+    }
+
+    /// Sum of both screens' height factors (height = width × 0.75 × fraction).
+    var totalHeightFactor: CGFloat {
+        switch self {
+        case .balanced: return 0.75 * 2
+        case .touchFocus, .topFocus: return 0.75 * 1.58
+        }
+    }
+}
+
+/// How far above the fingertip a stylus tap lands, in DS pixels — so the
+/// finger stops hiding the spot it presses.
+enum StylusOffset: String, CaseIterable, Codable, Identifiable {
+    case off = "Off"
+    case slight = "Slight"
+    case high = "High"
+    var id: String { rawValue }
+
+    var dsPixels: Int {
+        switch self {
+        case .off: return 0
+        case .slight: return 7
+        case .high: return 14
+        }
+    }
+}
+
 /// Portrait gap between the two screens, in points.
 enum ScreenGap: String, CaseIterable, Codable, Identifiable {
     case none = "None"
@@ -86,6 +128,12 @@ struct AppSettings: Codable, Equatable {
     var screenGap: ScreenGap = .slim
     /// Bottom screen rendered on top (portrait) / left (landscape).
     var swapScreens: Bool = false
+    var portraitLayout: PortraitLayout = .balanced
+
+    // Stylus
+    var stylusOffset: StylusOffset = .off
+    /// Show a ring where the tap actually lands.
+    var stylusCursor: Bool = true
 
     // Controls
     var hapticsEnabled: Bool = true
@@ -117,6 +165,9 @@ struct AppSettings: Codable, Equatable {
         filter = try c.decodeIfPresent(ScreenFilter.self, forKey: .filter) ?? d.filter
         screenGap = try c.decodeIfPresent(ScreenGap.self, forKey: .screenGap) ?? d.screenGap
         swapScreens = try c.decodeIfPresent(Bool.self, forKey: .swapScreens) ?? d.swapScreens
+        portraitLayout = try c.decodeIfPresent(PortraitLayout.self, forKey: .portraitLayout) ?? d.portraitLayout
+        stylusOffset = try c.decodeIfPresent(StylusOffset.self, forKey: .stylusOffset) ?? d.stylusOffset
+        stylusCursor = try c.decodeIfPresent(Bool.self, forKey: .stylusCursor) ?? d.stylusCursor
         hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? d.hapticsEnabled
         pressGlow = try c.decodeIfPresent(PressGlow.self, forKey: .pressGlow) ?? d.pressGlow
         controlOpacity = try c.decodeIfPresent(Double.self, forKey: .controlOpacity) ?? d.controlOpacity

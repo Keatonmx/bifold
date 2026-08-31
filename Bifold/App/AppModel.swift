@@ -98,6 +98,9 @@ final class AppModel: ObservableObject {
         if args.contains("-bifold-swap") {
             self.settings.swapScreens = true
         }
+        if args.contains("-bifold-touchbig") {
+            self.settings.portraitLayout = .touchFocus
+        }
         if let i = args.firstIndex(of: "-bifold-sheet"), i + 1 < args.count {
             let name = args[i + 1]
             // In-game sheets need the ROM booted first (autoplay opens it at 0.5 s).

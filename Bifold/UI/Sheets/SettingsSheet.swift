@@ -62,6 +62,9 @@ struct SettingsSheet: View {
 
                 section("Video") {
                     Card {
+                        SettingsRow(title: "Portrait layout", subtitle: "Big touch screen helps aimed taps") {
+                            SegmentedPill(options: PortraitLayout.allCases, label: { $0.rawValue }, selection: $model.settings.portraitLayout, fontSize: 11, horizontalPadding: 8)
+                        }
                         SettingsRow(title: "Filter", subtitle: "Applied to both screens") {
                             SegmentedPill(options: ScreenFilter.options, label: { $0.rawValue }, selection: $model.settings.filter)
                         }
@@ -70,6 +73,17 @@ struct SettingsSheet: View {
                         }
                         SettingsRow(title: "Swap screens", subtitle: "Touch screen on top instead", showsSeparator: false) {
                             BifoldToggle(isOn: $model.settings.swapScreens)
+                        }
+                    }
+                }
+
+                section("Stylus") {
+                    Card {
+                        SettingsRow(title: "Tap offset", subtitle: "Land taps a little above your fingertip") {
+                            SegmentedPill(options: StylusOffset.allCases, label: { $0.rawValue }, selection: $model.settings.stylusOffset)
+                        }
+                        SettingsRow(title: "Stylus cursor", subtitle: "Ring showing where the tap lands", showsSeparator: false) {
+                            BifoldToggle(isOn: $model.settings.stylusCursor)
                         }
                     }
                 }

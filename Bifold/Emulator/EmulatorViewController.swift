@@ -66,27 +66,62 @@ struct EmulatorScreen: UIViewControllerRepresentable {
 
 /// Transparent view over the touch screen: converts the first touch into DS
 /// touchscreen coordinates (0…255 × 0…191). Later touches are ignored — the
-/// DS has one stylus.
+/// DS has one stylus. An optional offset lands taps above the fingertip and
+/// a cursor ring shows exactly where they land.
 struct TouchScreenCatcher: UIViewRepresentable {
     /// DS coordinates while down, nil on release.
     let onStylus: ((x: Int, y: Int)?) -> Void
+    var offsetDSPixels: Int = 0
+    var showsCursor: Bool = true
 
     func makeUIView(context: Context) -> StylusView {
         let view = StylusView()
         view.backgroundColor = .clear
         view.isMultipleTouchEnabled = false
-        view.onStylus = onStylus
+        update(view)
         return view
     }
 
     func updateUIView(_ view: StylusView, context: Context) {
+        update(view)
+    }
+
+    private func update(_ view: StylusView) {
         view.onStylus = onStylus
+        view.offsetDSPixels = offsetDSPixels
+        view.showsCursor = showsCursor
     }
 }
 
 final class StylusView: UIView {
     var onStylus: (((x: Int, y: Int)?) -> Void)?
+    /// Vertical offset in DS pixels: the tap lands this far above the finger.
+    var offsetDSPixels: Int = 0
+    var showsCursor = true
+
     private var activeTouch: UITouch?
+    private let cursor = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        // Ring + centre dot, white over a soft dark halo so it reads on any game.
+        let path = UIBezierPath(ovalIn: CGRect(x: -9, y: -9, width: 18, height: 18))
+        path.append(UIBezierPath(ovalIn: CGRect(x: -1.5, y: -1.5, width: 3, height: 3)))
+        cursor.path = path.cgPath
+        cursor.strokeColor = UIColor.white.withAlphaComponent(0.9).cgColor
+        cursor.fillColor = UIColor.clear.cgColor
+        cursor.lineWidth = 2
+        cursor.shadowColor = UIColor.black.cgColor
+        cursor.shadowOpacity = 0.8
+        cursor.shadowRadius = 2
+        cursor.shadowOffset = .zero
+        cursor.isHidden = true
+        // The cursor must track the finger instantly, not glide.
+        cursor.actions = ["position": NSNull(), "hidden": NSNull()]
+        layer.addSublayer(cursor)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch == nil, let touch = touches.first else { return }
@@ -110,12 +145,20 @@ final class StylusView: UIView {
     private func endIfActive(_ touches: Set<UITouch>) {
         guard let touch = activeTouch, touches.contains(touch) else { return }
         activeTouch = nil
+        cursor.isHidden = true
         onStylus?(nil)
     }
 
     private func report(_ touch: UITouch) {
         guard bounds.width > 0, bounds.height > 0 else { return }
-        let p = touch.location(in: self)
+        var p = touch.location(in: self)
+        p.y -= CGFloat(offsetDSPixels) * bounds.height / 192
+        // The offset must not let the pen slide off the digitiser's top edge.
+        p.y = max(0, min(bounds.height, p.y))
+        if showsCursor {
+            cursor.position = p
+            cursor.isHidden = false
+        }
         let x = Int((p.x / bounds.width) * 256)
         let y = Int((p.y / bounds.height) * 192)
         onStylus?((x: min(255, max(0, x)), y: min(191, max(0, y))))

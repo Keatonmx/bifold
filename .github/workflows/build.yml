@@ -115,6 +115,7 @@ jobs:
             shot 09-quickmenu -bifold-autoplay -bifold-sheet quickMenu
             shot 10-save-states -bifold-autoplay -bifold-sheet saveStates
             shot 11-swapped -bifold-autoplay -bifold-swap
+            shot 11b-touchbig -bifold-autoplay -bifold-touchbig
             SHOT_DELAY=6 shot 12-library
             SHOT_DELAY=6 shot 13-game-actions -bifold-sheet gameActions
           fi
