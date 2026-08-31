@@ -224,6 +224,8 @@ struct SpeedChips: View {
                     Text(SpeedSteps.label(speed))
                         .font(Typography.chip)
                         .foregroundColor(selected ? .white : Palette.textSecondary)
+                        .lineLimit(1)
+                        .fixedSize()
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(selected ? theme.accent : Color.clear)
