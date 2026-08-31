@@ -147,27 +147,11 @@ struct PortraitGameView: View {
         }
     }
 
-    /// Closing the lid puts the game to sleep; a tap wakes it back up.
+    /// Closing the lid puts the game to sleep; holding wakes it back up.
     private var lidOverlay: some View {
-        Button {
-            ButtonHaptics.shared.tap()
-            session.openLid()
-        } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(theme.well.opacity(0.97))
-                VStack(spacing: 8) {
-                    Text("zZz")
-                        .font(.system(size: 26, weight: .bold, design: .monospaced))
-                        .foregroundColor(theme.accentText)
-                    Text("Lid closed · tap to open")
-                        .font(Typography.meta13)
-                        .foregroundColor(Palette.textTertiary)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 8)
+        LidClosedOverlay(fullScreen: false)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
     }
 
     /// Translucent round button floating over game pixels (portrait's back
@@ -200,6 +184,46 @@ struct PortraitGameView: View {
         .padding(.top, 6)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
+    }
+}
+
+/// The sleeping-lid cover. Waking takes a deliberate half-second hold — a
+/// stray tap must never reopen a lid you closed on purpose. The zZz swells
+/// while the hold charges. (Face-down sleep still reopens on pickup.)
+private struct LidClosedOverlay: View {
+    @EnvironmentObject private var session: EmulatorSession
+    @Environment(\.theme) private var theme
+    let fullScreen: Bool
+    @GestureState private var holding = false
+
+    var body: some View {
+        ZStack {
+            if fullScreen {
+                Color.black.opacity(0.88)
+            } else {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(theme.well.opacity(0.97))
+            }
+            VStack(spacing: 8) {
+                Text("zZz")
+                    .font(.system(size: 26, weight: .bold, design: .monospaced))
+                    .foregroundColor(theme.accentText)
+                Text("Lid closed · hold to open")
+                    .font(Typography.meta13)
+                    .foregroundColor(Palette.textTertiary)
+            }
+            .scaleEffect(holding ? 1.12 : 1)
+            .animation(.easeOut(duration: 0.4), value: holding)
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            LongPressGesture(minimumDuration: 0.5, maximumDistance: 30)
+                .updating($holding) { pressing, state, _ in state = pressing }
+                .onEnded { _ in
+                    ButtonHaptics.shared.tap()
+                    session.openLid()
+                }
+        )
     }
 }
 
@@ -261,24 +285,8 @@ struct LandscapeGameView: View {
             }
 
             if session.lidClosed {
-                Button {
-                    ButtonHaptics.shared.tap()
-                    session.openLid()
-                } label: {
-                    ZStack {
-                        Color.black.opacity(0.88)
-                        VStack(spacing: 8) {
-                            Text("zZz")
-                                .font(.system(size: 26, weight: .bold, design: .monospaced))
-                                .foregroundColor(theme.accentText)
-                            Text("Lid closed · tap to open")
-                                .font(Typography.meta13)
-                                .foregroundColor(Palette.textTertiary)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(width: size.width, height: size.height)
+                LidClosedOverlay(fullScreen: true)
+                    .frame(width: size.width, height: size.height)
             }
         }
         .frame(width: size.width, height: size.height)
