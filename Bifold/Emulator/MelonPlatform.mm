@@ -380,21 +380,37 @@ int Mic_ReadInput(s16* data, int maxlength, void* userdata)
     auto* state = static_cast<BifoldCoreState*>(userdata);
     if (maxlength <= 0)
         return 0;
-    if (!state || !state->micActive.load() || state->micMode.load() != 1)
+    if (state && state->micActive.load())
     {
-        // Silence: the DS hears a perfectly quiet room.
-        memset(data, 0, (size_t)maxlength * sizeof(s16));
+        // The MIC button always wins: canned blow noise (mic_blow.h).
+        const int blowLength = (int)(sizeof(mic_blow) / sizeof(s16));
+        int pos = state->micPos;
+        for (int i = 0; i < maxlength; i++)
+        {
+            data[i] = mic_blow[pos];
+            pos = (pos + 1) % blowLength;
+        }
+        state->micPos = pos;
         return maxlength;
     }
-    // Blow-noise loop (mic_blow.h, mono s16 at the mic's native rate).
-    const int blowLength = (int)(sizeof(mic_blow) / sizeof(s16));
-    int pos = state->micPos;
-    for (int i = 0; i < maxlength; i++)
+    if (state && state->micMode.load() == 2)
     {
-        data[i] = mic_blow[pos];
-        pos = (pos + 1) % blowLength;
+        // Real microphone: drain the tap's ring, zero-fill any shortfall.
+        uint32_t write = state->micRingWrite.load(std::memory_order_acquire);
+        uint32_t read = state->micRingRead;
+        int i = 0;
+        while (i < maxlength && read != write)
+        {
+            data[i++] = state->micRing[read % BifoldCoreState::MicRingSize];
+            read++;
+        }
+        state->micRingRead = read;
+        if (i < maxlength)
+            memset(data + i, 0, (size_t)(maxlength - i) * sizeof(s16));
+        return maxlength;
     }
-    state->micPos = pos;
+    // Silence: the DS hears a perfectly quiet room.
+    memset(data, 0, (size_t)maxlength * sizeof(s16));
     return maxlength;
 }
 
@@ -408,8 +424,18 @@ bool AAC_DecodeFrame(AACDecoder*, const void*, int, void*, int) { return false; 
 // ---------------------------------------------------------------- slot-2 addons (stubs)
 
 bool Addon_KeyDown(KeyType, void*) { return false; }
-void Addon_RumbleStart(u32, void*) {}
-void Addon_RumbleStop(void*) {}
+
+void Addon_RumbleStart(u32 len, void* userdata)
+{
+    if (auto* state = static_cast<BifoldCoreState*>(userdata))
+        state->rumbleUntilUS.store(GetUSCount() + (uint64_t)len * 1000);
+}
+
+void Addon_RumbleStop(void* userdata)
+{
+    if (auto* state = static_cast<BifoldCoreState*>(userdata))
+        state->rumbleUntilUS.store(0);
+}
 float Addon_MotionQuery(MotionQueryType, void*) { return 0.0f; }
 
 // ---------------------------------------------------------------- dynamic libraries (stub)

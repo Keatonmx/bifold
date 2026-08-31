@@ -43,11 +43,14 @@ typedef NS_ENUM(NSInteger, DSStopReason) {
     DSStopReasonPowerOff = 4,
 };
 
-/// Microphone feed while the MIC control is held.
+/// What the emulated microphone hears when the MIC button is NOT held
+/// (the held button always feeds blow noise).
 typedef NS_ENUM(NSInteger, DSMicMode) {
     DSMicModeSilence = 0,
-    /// Canned blow-noise loop (melonDS's mic_blow sample).
+    /// Blow-noise only while the MIC button is held (default).
     DSMicModeBlow = 1,
+    /// The phone's real microphone, fed via `submitMicSamples:count:`.
+    DSMicModeExternal = 2,
 };
 
 @class DSEmulatorCore;
@@ -122,8 +125,17 @@ typedef NS_ENUM(NSInteger, DSMicMode) {
 #pragma mark - Microphone
 
 @property (nonatomic) DSMicMode micMode;
-/// While active, the mic feeds the selected mode's samples; otherwise silence.
+/// The MIC button: while active, blow noise feeds the emulated microphone.
 - (void)setMicActive:(BOOL)active;
+/// Real-microphone feed (mono s16, ~48 kHz); any thread, lock-free.
+- (void)submitMicSamples:(const int16_t *)samples count:(NSUInteger)count;
+
+#pragma mark - Rumble Pak
+
+/// Insert the Slot-2 Rumble Pak on the next ROM load.
+@property (nonatomic) BOOL insertRumblePak;
+/// YES while the emulated pak's motor should be spinning.
+@property (nonatomic, readonly) BOOL rumbleActive;
 
 #pragma mark - Audio
 

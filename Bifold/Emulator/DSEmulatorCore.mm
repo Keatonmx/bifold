@@ -11,6 +11,7 @@
 
 #include "NDS.h"
 #include "NDSCart.h"
+#include "GBACart.h"
 #include "NDS_Header.h"
 #include "Args.h"
 #include "GPU.h"
@@ -173,6 +174,9 @@ static const double kOutputSampleRate = 48000.0;
 
     [self createConsole];
     _nds->SetNDSCart(std::move(cart));
+    if (self.insertRumblePak) {
+        _nds->SetGBACart(GBACart::LoadAddon(GBAAddon_RumblePak, _state));
+    }
     [self bootLoadedCart];
     return YES;
 }
@@ -310,6 +314,22 @@ static const double kOutputSampleRate = 48000.0;
 
 - (void)setMicActive:(BOOL)active {
     _state->micActive.store(active);
+}
+
+- (void)submitMicSamples:(const int16_t *)samples count:(NSUInteger)count {
+    uint32_t write = _state->micRingWrite.load(std::memory_order_relaxed);
+    for (NSUInteger i = 0; i < count; i++) {
+        _state->micRing[write % BifoldCoreState::MicRingSize] = samples[i];
+        write++;
+    }
+    _state->micRingWrite.store(write, std::memory_order_release);
+}
+
+#pragma mark - Rumble Pak
+
+- (BOOL)rumbleActive {
+    uint64_t until = _state->rumbleUntilUS.load();
+    return until != 0 && Platform::GetUSCount() < until;
 }
 
 #pragma mark - Video

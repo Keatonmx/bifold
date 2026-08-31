@@ -90,11 +90,20 @@ struct SettingsSheet: View {
 
                 section("Controls") {
                     Card {
-                        SettingsRow(title: "Haptics", subtitle: "Tap feedback on the drawn controls") {
+                        SettingsRow(title: "Haptics", subtitle: "Tap feedback and the Rumble Pak motor") {
                             BifoldToggle(isOn: $model.settings.hapticsEnabled)
+                        }
+                        SettingsRow(title: "Rumble Pak", subtitle: "Slot-2 rumble cart · applies at next boot") {
+                            BifoldToggle(isOn: $model.settings.rumblePakEnabled)
+                        }
+                        SettingsRow(title: "Face-down sleep", subtitle: "Place the phone face down to close the lid") {
+                            BifoldToggle(isOn: $model.settings.faceDownSleep)
                         }
                         SettingsRow(title: "MIC button", subtitle: "Hold it to blow into the microphone") {
                             BifoldToggle(isOn: $model.settings.showMicButton)
+                        }
+                        SettingsRow(title: "Real microphone", subtitle: "Blow or talk at the phone itself") {
+                            BifoldToggle(isOn: $model.settings.realMicEnabled)
                         }
                         SettingsRow(title: "Landscape control opacity", subtitle: "\(Int(model.settings.controlOpacity * 100))%") {
                             Slider(value: $model.settings.controlOpacity, in: 0.3...1)

@@ -73,6 +73,8 @@ final class EmulationRunner: NSObject, @unchecked Sendable {
     let topStore = FrameStore(width: 256, height: 192)
     let bottomStore = FrameStore(width: 256, height: 192)
     let audio: AudioEngine
+    let rumble = RumbleHaptics()
+    private var wasRumbling = false
 
     // Written from the main thread, read on the emulation thread. Individual
     // word-sized writes; torn reads are harmless here.
@@ -195,7 +197,18 @@ final class EmulationRunner: NSObject, @unchecked Sendable {
             topStore.publish(from: topScratch)
             bottomStore.publish(from: bottomScratch)
         }
+        let rumbling = core.rumbleActive
         lock.unlock()
+        if rumbling != wasRumbling {
+            wasRumbling = rumbling
+            rumble.setRumbling(rumbling)
+        }
+    }
+
+    /// Kill the motor when emulation pauses or stops (a game left it on).
+    func stopRumble() {
+        wasRumbling = false
+        rumble.setRumbling(false)
     }
 
     /// Moves whatever the core produced this frame into the audio ring buffer.
@@ -249,6 +262,7 @@ final class EmulatorSession: ObservableObject {
     var bottomStore: FrameStore { runner.bottomStore }
     var audio: AudioEngine { runner.audio }
     private let thread: EmulationThread
+    private let micMonitor = MicMonitor()
     private var cancellables = Set<AnyCancellable>()
 
     var settings: AppSettings { didSet { applySettings() } }
@@ -276,6 +290,12 @@ final class EmulatorSession: ObservableObject {
             DispatchQueue.main.async { self?.saveFlash &+= 1 }
         }
 
+        // Real-microphone samples go straight into the core's ring, lock-free.
+        let core = runner.core
+        micMonitor.onSamples = { samples, count in
+            core.submitMicSamples(samples, count: UInt(count))
+        }
+
         applySettings()
     }
 
@@ -284,7 +304,9 @@ final class EmulatorSession: ObservableObject {
     func load(_ game: Game) throws {
         stop()
         foldShown = false
+        let rumblePak = settings.rumblePakEnabled
         try runner.withCore { core in
+            core.insertRumblePak = rumblePak
             try core.loadROM(at: game.romURL)
         }
         self.game = game
@@ -307,6 +329,7 @@ final class EmulatorSession: ObservableObject {
         runner.paused = false
         runner.running = true
         audio.start(mixWithOthers: settings.backgroundAudioMixing)
+        if settings.realMicEnabled { micMonitor.start() }
         syncSpeed()
     }
 
@@ -314,6 +337,7 @@ final class EmulatorSession: ObservableObject {
         guard isRunning, !isPaused else { return }
         isPaused = true
         runner.paused = true
+        runner.stopRumble()
         audio.pause()
     }
 
@@ -324,6 +348,7 @@ final class EmulatorSession: ObservableObject {
         audio.reset()
         runner.paused = false
         audio.start(mixWithOthers: settings.backgroundAudioMixing)
+        if settings.realMicEnabled { micMonitor.start() }
     }
 
     /// Stops emulation and unloads the ROM (the battery save is flushed).
@@ -334,6 +359,8 @@ final class EmulatorSession: ObservableObject {
         isPaused = false
         isFastForward = false
         lidClosed = false
+        runner.stopRumble()
+        micMonitor.stop()
         audio.stop()
         runner.withCore { $0.unloadROM() }
         game = nil
@@ -355,15 +382,18 @@ final class EmulatorSession: ObservableObject {
         runner.core.setMicActive(held)
     }
 
-    func toggleLid() {
-        lidClosed.toggle()
-        let closed = lidClosed
+    func setLid(closed: Bool) {
+        guard lidClosed != closed else { return }
+        lidClosed = closed
         runner.withCore { $0.setLidClosed(closed) }
     }
 
+    func toggleLid() {
+        setLid(closed: !lidClosed)
+    }
+
     func openLid() {
-        guard lidClosed else { return }
-        toggleLid()
+        setLid(closed: false)
     }
 
     // MARK: Save states
@@ -412,6 +442,13 @@ final class EmulatorSession: ObservableObject {
         if ffSpeed != settings.ffSpeed { ffSpeed = settings.ffSpeed }
         audio.setMixWithOthers(settings.backgroundAudioMixing)
         audio.volume = Float(settings.volume) / 100
+        runner.rumble.enabled = settings.hapticsEnabled
+        runner.core.micMode = settings.realMicEnabled ? .external : .blow
+        if isRunning, !isPaused, settings.realMicEnabled {
+            micMonitor.start()
+        } else if !settings.realMicEnabled {
+            micMonitor.stop()
+        }
     }
 
     private func syncSpeed() {

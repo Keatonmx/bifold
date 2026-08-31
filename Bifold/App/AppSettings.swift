@@ -142,6 +142,12 @@ struct AppSettings: Codable, Equatable {
     var controlOpacity: Double = 0.65
     /// Show the hold-to-blow MIC button.
     var showMicButton: Bool = true
+    /// Feed the phone's real microphone to the emulated one.
+    var realMicEnabled: Bool = false
+    /// Slot-2 Rumble Pak, felt as phone haptics (applies at boot).
+    var rumblePakEnabled: Bool = true
+    /// Placing the phone face down closes the lid (DS sleep mode).
+    var faceDownSleep: Bool = true
 
     // Library
     var librarySort: LibrarySort = .recent
@@ -172,6 +178,9 @@ struct AppSettings: Codable, Equatable {
         pressGlow = try c.decodeIfPresent(PressGlow.self, forKey: .pressGlow) ?? d.pressGlow
         controlOpacity = try c.decodeIfPresent(Double.self, forKey: .controlOpacity) ?? d.controlOpacity
         showMicButton = try c.decodeIfPresent(Bool.self, forKey: .showMicButton) ?? d.showMicButton
+        realMicEnabled = try c.decodeIfPresent(Bool.self, forKey: .realMicEnabled) ?? d.realMicEnabled
+        rumblePakEnabled = try c.decodeIfPresent(Bool.self, forKey: .rumblePakEnabled) ?? d.rumblePakEnabled
+        faceDownSleep = try c.decodeIfPresent(Bool.self, forKey: .faceDownSleep) ?? d.faceDownSleep
         librarySort = try c.decodeIfPresent(LibrarySort.self, forKey: .librarySort) ?? d.librarySort
         hiddenGameIDs = try c.decodeIfPresent([String].self, forKey: .hiddenGameIDs) ?? []
         lastPlayedGameID = try c.decodeIfPresent(String.self, forKey: .lastPlayedGameID)

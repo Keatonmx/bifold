@@ -81,6 +81,14 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Face-down sleep: placing the phone face down closes the lid, like
+        // closing a real DS; picking it back up opens it.
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            self?.handleDeviceOrientation()
+        }
+
         #if DEBUG
         // Debug builds only (CI simulator screenshots); compiled out of Release.
         // `-bifold-theme <Name>`, `-bifold-sheet <name>`, `-bifold-sections A,B`,
@@ -354,6 +362,22 @@ final class AppModel: ObservableObject {
 
     func toggleFastForward() {
         session.isFastForward.toggle()
+    }
+
+    /// Set when the lid was closed by the face-down gesture (so only the
+    /// gesture reopens it, never a lid the user closed on purpose).
+    private var lidClosedByFaceDown = false
+
+    private func handleDeviceOrientation() {
+        guard settings.faceDownSleep, screen == .game, session.isRunning else { return }
+        let faceDown = UIDevice.current.orientation == .faceDown
+        if faceDown, !session.lidClosed {
+            session.setLid(closed: true)
+            lidClosedByFaceDown = true
+        } else if !faceDown, lidClosedByFaceDown {
+            session.setLid(closed: false)
+            lidClosedByFaceDown = false
+        }
     }
 
     func toggleSwapScreens() {
