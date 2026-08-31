@@ -44,6 +44,9 @@ struct SettingsSheet: View {
                         SettingsRow(title: "Fast-forward speed", subtitle: "Used when fast-forward is on") {
                             SpeedChips(current: model.settings.ffSpeed) { model.setSpeed($0) }
                         }
+                        SettingsRow(title: "» button", subtitle: "On-screen fast-forward toggle") {
+                            BifoldToggle(isOn: $model.settings.showFastForwardButton)
+                        }
                         SettingsRow(title: "Volume", subtitle: "\(model.settings.volume)%") {
                             Slider(value: Binding(get: { Double(model.settings.volume) },
                                                   set: { model.settings.volume = Int($0.rounded()) }),
@@ -65,6 +68,9 @@ struct SettingsSheet: View {
                         SettingsRow(title: "Portrait layout", subtitle: "Big touch screen helps aimed taps") {
                             SegmentedPill(options: PortraitLayout.allCases, label: { $0.rawValue }, selection: $model.settings.portraitLayout, fontSize: 11, horizontalPadding: 8)
                         }
+                        SettingsRow(title: "Screen shape", subtitle: "Fill stretches past the DS's true 4:3") {
+                            SegmentedPill(options: ScreenFit.allCases, label: { $0.rawValue }, selection: $model.settings.screenFit)
+                        }
                         SettingsRow(title: "Filter", subtitle: "Applied to both screens") {
                             SegmentedPill(options: ScreenFilter.options, label: { $0.rawValue }, selection: $model.settings.filter)
                         }
@@ -82,8 +88,8 @@ struct SettingsSheet: View {
                         SettingsRow(title: "Tap offset", subtitle: "Land taps a little above your fingertip") {
                             SegmentedPill(options: StylusOffset.allCases, label: { $0.rawValue }, selection: $model.settings.stylusOffset)
                         }
-                        SettingsRow(title: "Stylus cursor", subtitle: "Ring showing where the tap lands", showsSeparator: false) {
-                            BifoldToggle(isOn: $model.settings.stylusCursor)
+                        SettingsRow(title: "Marker", subtitle: "What shows where the tap lands", showsSeparator: false) {
+                            SegmentedPill(options: StylusStyle.allCases, label: { $0.rawValue }, selection: $model.settings.stylusStyle)
                         }
                     }
                 }

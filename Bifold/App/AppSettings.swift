@@ -79,6 +79,21 @@ enum PortraitLayout: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// Whether screens keep the DS's true 4:3 or stretch to use every point.
+enum ScreenFit: String, CaseIterable, Codable, Identifiable {
+    case aspect = "4:3"
+    case fill = "Fill"
+    var id: String { rawValue }
+}
+
+/// What marks the stylus contact point on the touch screen.
+enum StylusStyle: String, CaseIterable, Codable, Identifiable {
+    case off = "Off"
+    case ring = "Ring"
+    case stylus = "Stylus"
+    var id: String { rawValue }
+}
+
 /// How far above the fingertip a stylus tap lands, in DS pixels — so the
 /// finger stops hiding the spot it presses.
 enum StylusOffset: String, CaseIterable, Codable, Identifiable {
@@ -119,12 +134,15 @@ struct AppSettings: Codable, Equatable {
 
     // Playback
     var ffSpeed: Double = 2
+    /// Optional on-screen » control; tap toggles fast-forward.
+    var showFastForwardButton: Bool = false
     var bootAnimationEnabled: Bool = true
     var backgroundAudioMixing: Bool = false
     var volume: Int = 100
 
     // Video
     var filter: ScreenFilter = .none
+    var screenFit: ScreenFit = .aspect
     var screenGap: ScreenGap = .slim
     /// Bottom screen rendered on top (portrait) / left (landscape).
     var swapScreens: Bool = false
@@ -132,8 +150,8 @@ struct AppSettings: Codable, Equatable {
 
     // Stylus
     var stylusOffset: StylusOffset = .off
-    /// Show a ring where the tap actually lands.
-    var stylusCursor: Bool = true
+    /// Marker at the tap point: nothing, a ring, or a drawn DS stylus.
+    var stylusStyle: StylusStyle = .ring
 
     // Controls
     var hapticsEnabled: Bool = true
@@ -165,15 +183,17 @@ struct AppSettings: Codable, Equatable {
         theme = try c.decodeIfPresent(ThemeName.self, forKey: .theme) ?? d.theme
         skin = try c.decodeIfPresent(ControllerSkinName.self, forKey: .skin) ?? d.skin
         ffSpeed = try c.decodeIfPresent(Double.self, forKey: .ffSpeed) ?? d.ffSpeed
+        showFastForwardButton = try c.decodeIfPresent(Bool.self, forKey: .showFastForwardButton) ?? d.showFastForwardButton
         bootAnimationEnabled = try c.decodeIfPresent(Bool.self, forKey: .bootAnimationEnabled) ?? d.bootAnimationEnabled
         backgroundAudioMixing = try c.decodeIfPresent(Bool.self, forKey: .backgroundAudioMixing) ?? d.backgroundAudioMixing
         volume = try c.decodeIfPresent(Int.self, forKey: .volume) ?? d.volume
         filter = try c.decodeIfPresent(ScreenFilter.self, forKey: .filter) ?? d.filter
+        screenFit = try c.decodeIfPresent(ScreenFit.self, forKey: .screenFit) ?? d.screenFit
         screenGap = try c.decodeIfPresent(ScreenGap.self, forKey: .screenGap) ?? d.screenGap
         swapScreens = try c.decodeIfPresent(Bool.self, forKey: .swapScreens) ?? d.swapScreens
         portraitLayout = try c.decodeIfPresent(PortraitLayout.self, forKey: .portraitLayout) ?? d.portraitLayout
         stylusOffset = try c.decodeIfPresent(StylusOffset.self, forKey: .stylusOffset) ?? d.stylusOffset
-        stylusCursor = try c.decodeIfPresent(Bool.self, forKey: .stylusCursor) ?? d.stylusCursor
+        stylusStyle = try c.decodeIfPresent(StylusStyle.self, forKey: .stylusStyle) ?? d.stylusStyle
         hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? d.hapticsEnabled
         pressGlow = try c.decodeIfPresent(PressGlow.self, forKey: .pressGlow) ?? d.pressGlow
         controlOpacity = try c.decodeIfPresent(Double.self, forKey: .controlOpacity) ?? d.controlOpacity

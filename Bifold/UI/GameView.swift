@@ -37,19 +37,27 @@ private struct DSScreenView: View {
     let filter: ScreenFilter
     let isTouchScreen: Bool
     var cornerRadius: CGFloat = 6
+    /// Fill mode: stretch into whatever frame the layout gives, no 4:3 lock.
+    var fill: Bool = false
 
     var body: some View {
-        EmulatorScreen(frameStore: store, filter: filter)
-            .aspectRatio(4.0 / 3.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(Palette.hairline06, lineWidth: 1))
-            .overlay {
-                if isTouchScreen {
-                    TouchScreenCatcher(onStylus: { point in session.setStylus(point) },
-                                       offsetDSPixels: model.settings.stylusOffset.dsPixels,
-                                       showsCursor: model.settings.stylusCursor)
-                }
+        Group {
+            if fill {
+                EmulatorScreen(frameStore: store, filter: filter, stretch: true)
+            } else {
+                EmulatorScreen(frameStore: store, filter: filter)
+                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
             }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(Palette.hairline06, lineWidth: 1))
+        .overlay {
+            if isTouchScreen {
+                TouchScreenCatcher(onStylus: { point in session.setStylus(point) },
+                                   offsetDSPixels: model.settings.stylusOffset.dsPixels,
+                                   style: model.settings.stylusStyle)
+            }
+        }
     }
 }
 
@@ -70,38 +78,49 @@ struct PortraitGameView: View {
     var body: some View {
         GeometryReader { geo in
             let gap = model.settings.screenGap.points
+            let fill = model.settings.screenFit == .fill
             // No top bar in-game: a floating back bubble rides the top screen,
             // so the screens get every point the controls don't need. With a
-            // focused layout one screen shrinks, so the base width can grow.
+            // focused layout one screen shrinks, so the base width can grow;
+            // Fill ignores 4:3 and hands the screens all of it.
             let available = geo.size.height - minControlsHeight - gap - 28
             let maxByHeight = available / model.settings.portraitLayout.totalHeightFactor
-            let screenWidth = max(200, min(geo.size.width - 8, maxByHeight))
+            let screenWidth = fill ? max(200, geo.size.width - 8)
+                                   : max(200, min(geo.size.width - 8, maxByHeight))
             VStack(spacing: 0) {
-                screenBand(width: screenWidth, gap: gap)
+                screenBand(width: screenWidth, gap: gap, fill: fill, availableHeight: available)
                 controlsArea
             }
         }
         .background(theme.bg.ignoresSafeArea())
     }
 
-    private func screenBand(width: CGFloat, gap: CGFloat) -> some View {
+    private func screenBand(width: CGFloat, gap: CGFloat, fill: Bool, availableHeight: CGFloat) -> some View {
         let swap = model.settings.swapScreens
         let layout = model.settings.portraitLayout
         // Which role each display slot shows, and how wide it is (a focused
-        // layout gives the emphasised role the full width).
+        // layout gives the emphasised role the full width). In Fill mode the
+        // fractions divide the height instead and both slots span the width.
         let slot1IsTouch = swap
         let slot2IsTouch = !swap
+        let f1 = layout.fraction(isTouchScreen: slot1IsTouch)
+        let f2 = layout.fraction(isTouchScreen: slot2IsTouch)
+        let fillHeight = max(100, availableHeight - gap)
         return VStack(spacing: gap) {
             DSScreenView(store: slot1IsTouch ? session.bottomStore : session.topStore,
                          filter: model.settings.filter,
-                         isTouchScreen: slot1IsTouch)
-                .frame(width: width * layout.fraction(isTouchScreen: slot1IsTouch))
+                         isTouchScreen: slot1IsTouch,
+                         fill: fill)
+                .frame(width: fill ? width : width * f1,
+                       height: fill ? fillHeight * f1 / (f1 + f2) : nil)
                 .rotation3DEffect(.degrees(unfolded ? 0 : -68), axis: (x: 1, y: 0, z: 0),
                                   anchor: .bottom, perspective: 0.5)
             DSScreenView(store: slot2IsTouch ? session.bottomStore : session.topStore,
                          filter: model.settings.filter,
-                         isTouchScreen: slot2IsTouch)
-                .frame(width: width * layout.fraction(isTouchScreen: slot2IsTouch))
+                         isTouchScreen: slot2IsTouch,
+                         fill: fill)
+                .frame(width: fill ? width : width * f2,
+                       height: fill ? fillHeight * f2 / (f1 + f2) : nil)
                 .rotation3DEffect(.degrees(unfolded ? 0 : 68), axis: (x: 1, y: 0, z: 0),
                                   anchor: .top, perspective: 0.5)
         }
@@ -177,9 +196,11 @@ struct PortraitGameView: View {
                               metrics: metrics,
                               size: geo.size,
                               showBlow: model.settings.showMicButton,
+                              showFastForward: model.settings.showFastForwardButton,
                               onKeys: { session.setTouchKeys($0) },
                               onMenu: { model.openSheet(.quickMenu) },
-                              onMic: { session.setMicHeld($0) })
+                              onMic: { session.setMicHeld($0) },
+                              onFastForward: { model.toggleFastForward() })
         }
         .padding(.top, 6)
         .padding(.horizontal, 16)
@@ -250,19 +271,27 @@ struct LandscapeGameView: View {
 
     var body: some View {
         let swap = model.settings.swapScreens
+        let fill = model.settings.screenFit == .fill
         ZStack(alignment: .topLeading) {
             Color.black
 
-            // Two screens side by side, centred, as large as the height allows.
+            // Two screens side by side, centred, as large as the height allows
+            // (Fill hands each exactly half the display).
             HStack(spacing: 8) {
                 DSScreenView(store: swap ? session.bottomStore : session.topStore,
                              filter: model.settings.filter,
                              isTouchScreen: swap,
-                             cornerRadius: 4)
+                             cornerRadius: 4,
+                             fill: fill)
+                    .frame(width: fill ? (size.width - 8) / 2 : nil,
+                           height: fill ? size.height : nil)
                 DSScreenView(store: swap ? session.topStore : session.bottomStore,
                              filter: model.settings.filter,
                              isTouchScreen: !swap,
-                             cornerRadius: 4)
+                             cornerRadius: 4,
+                             fill: fill)
+                    .frame(width: fill ? (size.width - 8) / 2 : nil,
+                           height: fill ? size.height : nil)
             }
             .frame(width: size.width, height: size.height)
 
@@ -271,9 +300,11 @@ struct LandscapeGameView: View {
                               metrics: metrics,
                               size: controlsRect.size,
                               showBlow: model.settings.showMicButton,
+                              showFastForward: model.settings.showFastForwardButton,
                               onKeys: { session.setTouchKeys($0) },
                               onMenu: { model.openSheet(.quickMenu) },
-                              onMic: { session.setMicHeld($0) })
+                              onMic: { session.setMicHeld($0) },
+                              onFastForward: { model.toggleFastForward() })
                 .opacity(model.settings.controlOpacity)
                 .frame(width: controlsRect.width, height: controlsRect.height)
                 .offset(x: controlsRect.minX, y: controlsRect.minY)

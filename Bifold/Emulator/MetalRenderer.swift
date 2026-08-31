@@ -30,6 +30,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private var lastFrameIndex: UInt64 = .max
 
     var filter: ScreenFilter = .none
+    /// Stretch to the whole view instead of aspect-fitting (the Fill option).
+    var stretch = false
     var clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
 
     init?(frameStore: FrameStore) {
@@ -91,15 +93,23 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         commandBuffer.commit()
     }
 
-    /// Aspect-fit quad (equals fill when the view is exactly 4:3).
+    /// Aspect-fit quad (equals fill when the view is exactly 4:3), or a
+    /// full-view stretch in Fill mode.
     private func makeUniforms(drawableSize: CGSize) -> RendererUniforms {
         let viewW = Float(max(drawableSize.width, 1))
         let viewH = Float(max(drawableSize.height, 1))
         let texW = Float(frameStore.width)
         let texH = Float(frameStore.height)
-        let scale = min(viewW / texW, viewH / texH)
-        let quadW = texW * scale
-        let quadH = texH * scale
+        let quadW: Float
+        let quadH: Float
+        if stretch {
+            quadW = viewW
+            quadH = viewH
+        } else {
+            let scale = min(viewW / texW, viewH / texH)
+            quadW = texW * scale
+            quadH = texH * scale
+        }
         return RendererUniforms(
             quadScale: SIMD2<Float>(quadW / viewW, quadH / viewH),
             textureSize: SIMD2<Float>(texW, texH),

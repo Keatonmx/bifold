@@ -30,7 +30,7 @@ struct ControlMetrics {
         case .a, .b, .x, .y: return CGSize(width: face, height: face)
         case .l, .r: return shoulder
         case .select, .start, .menu: return pill
-        case .blow: return CGSize(width: blow, height: blow)
+        case .blow, .fastForward: return CGSize(width: blow, height: blow)
         }
     }
 }
@@ -38,13 +38,14 @@ struct ControlMetrics {
 enum ControlGeometry {
     /// Frames for every control given the container size.
     static func frames(layout: ControlLayout, metrics: ControlMetrics, in size: CGSize,
-                       showBlow: Bool) -> [ControlID: CGRect] {
+                       showBlow: Bool, showFastForward: Bool) -> [ControlID: CGRect] {
         var result: [ControlID: CGRect] = [:]
         // Nothing sensible can be placed before the area has a real size
         // (SwiftUI's first layout pass can propose zero).
         guard size.width.isFinite, size.height.isFinite, size.width >= 100, size.height >= 100 else { return result }
         for control in ControlID.allCases {
             if control == .blow && !showBlow { continue }
+            if control == .fastForward && !showFastForward { continue }
             let placement = layout[control]
             let base = metrics.baseSize(of: control)
             let scale = CGFloat(placement.scale)

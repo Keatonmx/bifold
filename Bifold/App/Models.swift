@@ -91,7 +91,7 @@ struct GameData: Codable, Equatable {
 // MARK: - Controls layout
 
 enum ControlID: String, CaseIterable, Codable, Identifiable {
-    case dpad, a, b, x, y, l, r, select, start, menu, blow
+    case dpad, a, b, x, y, l, r, select, start, menu, blow, fastForward
     var id: String { rawValue }
 
     var label: String {
@@ -107,6 +107,7 @@ enum ControlID: String, CaseIterable, Codable, Identifiable {
         case .start: return "START"
         case .menu: return "MENU"
         case .blow: return "MIC"
+        case .fastForward: return "»"
         }
     }
 }
@@ -142,6 +143,7 @@ struct ControlLayout: Codable, Equatable {
         .a:      ControlPlacement(x: 0.94, y: 0.50),
         .b:      ControlPlacement(x: 0.795, y: 0.72),
         .blow:   ControlPlacement(x: 0.475, y: 0.40),
+        .fastForward: ControlPlacement(x: 0.475, y: 0.72),
         .select: ControlPlacement(x: 0.24, y: 0.94),
         .menu:   ControlPlacement(x: 0.50, y: 0.94),
         .start:  ControlPlacement(x: 0.76, y: 0.94),
@@ -159,6 +161,7 @@ struct ControlLayout: Codable, Equatable {
         .a:      ControlPlacement(x: 0.962, y: 0.52),
         .b:      ControlPlacement(x: 0.895, y: 0.705),
         .blow:   ControlPlacement(x: 0.045, y: 0.92),
+        .fastForward: ControlPlacement(x: 0.955, y: 0.92),
         .select: ControlPlacement(x: 0.30, y: 0.94),
         .start:  ControlPlacement(x: 0.70, y: 0.94),
     ])

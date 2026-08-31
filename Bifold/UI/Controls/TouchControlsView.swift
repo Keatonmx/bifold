@@ -24,10 +24,13 @@ struct TouchControlsView: View {
     let metrics: ControlMetrics
     let size: CGSize
     let showBlow: Bool
+    let showFastForward: Bool
     let onKeys: (DSKeyMask) -> Void
     let onMenu: () -> Void
     /// The MIC button's held state changed.
     let onMic: (Bool) -> Void
+    /// Tap on the » control.
+    let onFastForward: () -> Void
 
     @StateObject private var press = ControlPressState()
     /// Last size that looked like a real controls area. Mid-relayout SwiftUI can
@@ -42,7 +45,8 @@ struct TouchControlsView: View {
 
     var body: some View {
         let effective = TouchControlsView.isPlausible(size) ? size : stableSize
-        let frames = ControlGeometry.frames(layout: layout, metrics: metrics, in: effective, showBlow: showBlow)
+        let frames = ControlGeometry.frames(layout: layout, metrics: metrics, in: effective,
+                                            showBlow: showBlow, showFastForward: showFastForward)
         ZStack(alignment: .topLeading) {
             // Purely visual; the UIKit layer below does all input. They must
             // never swallow touches, or the stylus screen underneath (landscape
@@ -66,7 +70,11 @@ struct TouchControlsView: View {
                                 },
                                 onPressed: { [press] in press.pressed = $0 },
                                 onTap: { control in
-                                    if control == .menu { onMenu() }
+                                    switch control {
+                                    case .menu: onMenu()
+                                    case .fastForward: onFastForward()
+                                    default: break
+                                    }
                                 },
                                 onMic: onMic)
                 .frame(width: size.width, height: size.height)
@@ -121,6 +129,8 @@ private struct ControlSlot: View {
                                led: session.isRunning && !session.isPaused ? Color(hex: 0x58CC52) : Color(hex: 0xE0A835))
             case .blow:
                 BlowButtonView(metrics: metrics, pressed: pressed.contains(.blow))
+            case .fastForward:
+                FastForwardButtonView(active: session.isFastForward, pressed: pressed.contains(.fastForward))
             }
         }
         .frame(width: base.width, height: base.height)
@@ -202,9 +212,11 @@ final class TouchLayerView: UIView {
             if current == .dpad { continue }
             // The MIC button keeps its touch: blowing is a hold, not a roll.
             if current == .blow { continue }
+            // The » control is a tap target; keep its touch too.
+            if current == .fastForward { continue }
             // Rolling from one face button onto another.
             if let next = control(at: point, slop: slop), next != current,
-               next != .dpad, next != .menu, next != .blow {
+               next != .dpad, next != .menu, next != .blow, next != .fastForward {
                 touchControls[id] = next
                 ButtonHaptics.shared.tap()
             } else if current != nil, control(at: point, slop: slop) == nil {
@@ -217,9 +229,10 @@ final class TouchLayerView: UIView {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
             let id = ObjectIdentifier(touch)
-            if touchControls[id] == .menu, let frame = frames[.menu],
+            if let control = touchControls[id], control == .menu || control == .fastForward,
+               let frame = frames[control],
                frame.insetBy(dx: -slop, dy: -slop).contains(touch.location(in: self)) {
-                onTap?(.menu)
+                onTap?(control)
             }
             touchControls[id] = nil
         }
@@ -235,11 +248,11 @@ final class TouchLayerView: UIView {
 
     private func control(at point: CGPoint, slop: CGFloat) -> ControlID? {
         // Round controls first (their slop overlaps the pills less).
-        let order: [ControlID] = [.a, .b, .x, .y, .dpad, .blow, .menu, .select, .start, .l, .r]
+        let order: [ControlID] = [.a, .b, .x, .y, .dpad, .blow, .fastForward, .menu, .select, .start, .l, .r]
         for control in order {
             guard let frame = frames[control] else { continue }
             switch control {
-            case .a, .b, .x, .y, .blow:
+            case .a, .b, .x, .y, .blow, .fastForward:
                 let r = frame.width / 2 + slop
                 let c = CGPoint(x: frame.midX, y: frame.midY)
                 if hypot(point.x - c.x, point.y - c.y) <= r { return control }
@@ -276,7 +289,7 @@ final class TouchLayerView: UIView {
                     keys.formUnion(d)
                     dpadHighlight.formUnion(d)
                 }
-            case .menu, .blow:
+            case .menu, .blow, .fastForward:
                 break
             }
         }

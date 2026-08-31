@@ -276,6 +276,26 @@ struct ArcShape: Shape {
     }
 }
 
+/// The optional on-screen » control: tap toggles fast-forward. Lit in the
+/// accent colour while fast-forward is engaged.
+struct FastForwardButtonView: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.skin) private var skin
+    let active: Bool
+    let pressed: Bool
+
+    var body: some View {
+        Circle()
+            .fill(active ? AnyShapeStyle(theme.accent) : AnyShapeStyle(skin.buttonGradient))
+            .overlay(Circle().stroke(Palette.hairline12, lineWidth: 0.5))
+            .shadow(color: active ? theme.accent.opacity(0.5) : .black.opacity(0.35), radius: active ? 6 : 3, y: 2)
+            .overlay(Text("»").font(.system(size: 17, weight: .heavy))
+                .foregroundColor(active ? .white : Palette.textSecondary))
+            .scaleEffect(pressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.06), value: pressed)
+    }
+}
+
 struct FFBadge: View {
     @Environment(\.theme) private var theme
     let label: String
