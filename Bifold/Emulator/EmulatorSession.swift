@@ -291,7 +291,6 @@ final class EmulatorSession: ObservableObject {
         }
 
         // Real-microphone samples go straight into the core's ring, lock-free.
-        let core = runner.core
         micMonitor.onSamples = { samples, count in
             core.submitMicSamples(samples, count: UInt(count))
         }
