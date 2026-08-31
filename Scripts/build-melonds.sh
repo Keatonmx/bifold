@@ -94,7 +94,7 @@ build_slice ios-simulator      iphonesimulator "arm64;x86_64"
 # "fatfs/ff.h", "frontend/mic_blow.h", …), so mirror the whole header tree —
 # minus the Qt frontend, which drags in Qt includes nobody has.
 rm -rf "$DIST"; mkdir -p "$DIST/include"
-(cd "$SRC/src" && find . -name '*.h' -not -path './frontend/qt_sdl/*' | while IFS= read -r h; do
+(cd "$SRC/src" && find . \( -name '*.h' -o -name '*.hpp' \) -not -path './frontend/qt_sdl/*' | while IFS= read -r h; do
   mkdir -p "$DIST/include/$(dirname "$h")"
   cp "$h" "$DIST/include/$h"
 done)
