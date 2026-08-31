@@ -151,7 +151,7 @@ static const double kOutputSampleRate = 48000.0;
         sramLength = (u32)savData.length;
     }
 
-    NDSCartArgs cartArgs {};
+    NDSCart::NDSCartArgs cartArgs {};
     cartArgs.SDCard = std::nullopt;
     cartArgs.SRAM = std::move(sram);
     cartArgs.SRAMLength = sramLength;
