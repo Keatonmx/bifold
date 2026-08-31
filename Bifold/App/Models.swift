@@ -131,18 +131,20 @@ struct ControlLayout: Codable, Equatable {
     /// A B X Y diamond right (X top, Y left, A right, B bottom, like the
     /// hardware), L/R pills in the top corners, MIC between the clusters,
     /// SELECT · MENU · START along the bottom.
+    /// Tuned for a ~210pt controls band: shoulders hug the top corners, the
+    /// diamond sits clear of R above and the pill row below.
     static let portraitDefault = ControlLayout(placements: [
-        .l:      ControlPlacement(x: 0.12, y: 0.08),
-        .r:      ControlPlacement(x: 0.88, y: 0.08),
-        .dpad:   ControlPlacement(x: 0.20, y: 0.50),
-        .x:      ControlPlacement(x: 0.795, y: 0.26),
-        .y:      ControlPlacement(x: 0.645, y: 0.48),
-        .a:      ControlPlacement(x: 0.945, y: 0.48),
-        .b:      ControlPlacement(x: 0.795, y: 0.70),
-        .blow:   ControlPlacement(x: 0.475, y: 0.42),
-        .select: ControlPlacement(x: 0.24, y: 0.93),
-        .menu:   ControlPlacement(x: 0.50, y: 0.93),
-        .start:  ControlPlacement(x: 0.76, y: 0.93),
+        .l:      ControlPlacement(x: 0.12, y: 0.06),
+        .r:      ControlPlacement(x: 0.88, y: 0.06),
+        .dpad:   ControlPlacement(x: 0.19, y: 0.47),
+        .x:      ControlPlacement(x: 0.795, y: 0.28),
+        .y:      ControlPlacement(x: 0.645, y: 0.50),
+        .a:      ControlPlacement(x: 0.94, y: 0.50),
+        .b:      ControlPlacement(x: 0.795, y: 0.72),
+        .blow:   ControlPlacement(x: 0.475, y: 0.40),
+        .select: ControlPlacement(x: 0.24, y: 0.94),
+        .menu:   ControlPlacement(x: 0.50, y: 0.94),
+        .start:  ControlPlacement(x: 0.76, y: 0.94),
     ])
 
     /// Landscape overlay (coordinates relative to the area inside the safe

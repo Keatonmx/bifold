@@ -65,7 +65,7 @@ struct PortraitGameView: View {
     @State private var unfolded = false
 
     private let metrics = ControlMetrics(isLandscape: false)
-    private let minControlsHeight: CGFloat = 196
+    private let minControlsHeight: CGFloat = 210
 
     var body: some View {
         GeometryReader { geo in
