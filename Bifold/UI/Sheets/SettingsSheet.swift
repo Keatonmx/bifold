@@ -47,6 +47,14 @@ struct SettingsSheet: View {
                         SettingsRow(title: "» button", subtitle: "On-screen fast-forward toggle") {
                             BifoldToggle(isOn: $model.settings.showFastForwardButton)
                         }
+                        SettingsRow(title: "Bookmarks", subtitle: "Automatic snapshots while you play") {
+                            BifoldToggle(isOn: $model.settings.bookmarksEnabled)
+                        }
+                        SettingsRow(title: "Bookmark every", subtitle: "Minutes of play between snapshots") {
+                            SegmentedPill(options: BookmarkInterval.options,
+                                          label: { "\($0)m" },
+                                          selection: $model.settings.bookmarkMinutes)
+                        }
                         SettingsRow(title: "Volume", subtitle: "\(model.settings.volume)%") {
                             Slider(value: Binding(get: { Double(model.settings.volume) },
                                                   set: { model.settings.volume = Int($0.rounded()) }),

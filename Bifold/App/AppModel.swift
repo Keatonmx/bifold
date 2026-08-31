@@ -18,6 +18,7 @@ enum Screen: Equatable {
 enum ActiveSheet: Equatable, Identifiable {
     case quickMenu
     case saveStates
+    case bookmarks
     case settings
     /// Play / continue / import save / remove for `AppModel.selectedGame`.
     case gameActions
@@ -81,6 +82,13 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Feature discovery: the first bookmark ever placed announces itself.
+        session.onBookmarkCaptured = { [weak self] in
+            guard let self, !self.settings.hasSeenBookmarkHint else { return }
+            self.settings.hasSeenBookmarkHint = true
+            self.showToast("Bookmark placed · find them in the Quick Menu")
+        }
+
         // Face-down sleep: placing the phone face down closes the lid, like
         // closing a real DS; picking it back up opens it.
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
@@ -133,6 +141,14 @@ final class AppModel: ObservableObject {
                 case "about": self.openSheet(.about)
                 case "gameActions": if let g = self.games.first { self.select(g) }
                 case "quickMenu": self.openSheet(.quickMenu)
+                case "bookmarks":
+                    self.session.captureBookmark()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                        self?.session.captureBookmark()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                            self?.openSheet(.bookmarks)
+                        }
+                    }
                 case "saveStates":
                     self.saveToAutoSlot()
                     self.save(toSlot: 1)
@@ -252,6 +268,8 @@ final class AppModel: ObservableObject {
         guard let game = currentGame else { return }
         var autosaved = false
         if session.isRunning {
+            // The session's final page belongs on the shelf too.
+            session.captureBookmark()
             autosaved = session.saveState(slot: 0)
             if autosaved {
                 gameData.slots[0].savedAt = Date()
@@ -397,6 +415,21 @@ final class AppModel: ObservableObject {
     func toggleSwapScreens() {
         settings.swapScreens.toggle()
         showToast(settings.swapScreens ? "Touch screen on top" : "Touch screen below")
+    }
+
+    /// Turns back to a bookmark — after stashing the current spot in the
+    /// Auto slot so jumping into the past never loses the present.
+    func jumpToBookmark(_ bookmark: Bookmark) {
+        if session.saveState(slot: 0) {
+            gameData.slots[0].savedAt = Date()
+            persistGameData()
+        }
+        if session.loadBookmark(bookmark) {
+            closeSheet()
+            showToast("Turned back · your spot was saved to Auto")
+        } else {
+            showToast("Couldn't open that bookmark")
+        }
     }
 
     /// Quick Menu: cycle Off → Righty → Lefty.

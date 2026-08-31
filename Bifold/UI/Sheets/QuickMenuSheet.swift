@@ -69,6 +69,7 @@ struct QuickMenuSheet: View {
             // Navigation
             Card {
                 NavRow(title: "All save states", detail: "\(model.gameData.slots.filter(\.isFilled).count) of \(SaveSlot.count) used") { model.openSheet(.saveStates) }
+                NavRow(title: "Bookmarks", detail: bookmarkDetail) { model.openSheet(.bookmarks) }
                 NavRow(title: "Book mode", subtitle: "Sideways games · hold the phone landscape",
                        detail: model.settings.bookMode.rawValue, showsChevron: false) {
                     model.cycleBookMode()
@@ -97,6 +98,12 @@ struct QuickMenuSheet: View {
 
             } }
         }
+    }
+
+    private var bookmarkDetail: String {
+        guard let id = model.currentGame?.id else { return "" }
+        let n = BookmarkStore.shared.count(for: id)
+        return n == 1 ? "1 page" : "\(n) pages"
     }
 
     private var fastForwardSubtitle: String {

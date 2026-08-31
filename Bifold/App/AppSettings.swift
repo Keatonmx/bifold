@@ -66,6 +66,11 @@ enum PressGlow: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Bookmark cadences offered in Settings (minutes of play).
+enum BookmarkInterval {
+    static let options = [2, 5, 10]
+}
+
 /// Fast-forward presets. DS emulation is heavy; the ceiling is modest.
 enum SpeedSteps {
     static let presets: [Double] = [1.5, 2, 3, 4]
@@ -158,6 +163,9 @@ struct AppSettings: Codable, Equatable {
     var ffSpeed: Double = 2
     /// Optional on-screen » control; tap toggles fast-forward.
     var showFastForwardButton: Bool = false
+    /// Automatic playthrough bookmarks while you play.
+    var bookmarksEnabled: Bool = true
+    var bookmarkMinutes: Int = 5
     var bootAnimationEnabled: Bool = true
     var backgroundAudioMixing: Bool = false
     var volume: Int = 100
@@ -200,6 +208,8 @@ struct AppSettings: Codable, Equatable {
     // Remembered state
     var lastPlayedGameID: String?
     var toggledSections: [String] = []
+    /// One-time toast when the very first bookmark is placed.
+    var hasSeenBookmarkHint: Bool = false
 
     init() {}
 
@@ -210,6 +220,8 @@ struct AppSettings: Codable, Equatable {
         skin = try c.decodeIfPresent(ControllerSkinName.self, forKey: .skin) ?? d.skin
         ffSpeed = try c.decodeIfPresent(Double.self, forKey: .ffSpeed) ?? d.ffSpeed
         showFastForwardButton = try c.decodeIfPresent(Bool.self, forKey: .showFastForwardButton) ?? d.showFastForwardButton
+        bookmarksEnabled = try c.decodeIfPresent(Bool.self, forKey: .bookmarksEnabled) ?? d.bookmarksEnabled
+        bookmarkMinutes = try c.decodeIfPresent(Int.self, forKey: .bookmarkMinutes) ?? d.bookmarkMinutes
         bootAnimationEnabled = try c.decodeIfPresent(Bool.self, forKey: .bootAnimationEnabled) ?? d.bootAnimationEnabled
         backgroundAudioMixing = try c.decodeIfPresent(Bool.self, forKey: .backgroundAudioMixing) ?? d.backgroundAudioMixing
         volume = try c.decodeIfPresent(Int.self, forKey: .volume) ?? d.volume
@@ -233,6 +245,7 @@ struct AppSettings: Codable, Equatable {
         hiddenGameIDs = try c.decodeIfPresent([String].self, forKey: .hiddenGameIDs) ?? []
         lastPlayedGameID = try c.decodeIfPresent(String.self, forKey: .lastPlayedGameID)
         toggledSections = try c.decodeIfPresent([String].self, forKey: .toggledSections) ?? d.toggledSections
+        hasSeenBookmarkHint = try c.decodeIfPresent(Bool.self, forKey: .hasSeenBookmarkHint) ?? d.hasSeenBookmarkHint
     }
 }
 

@@ -311,6 +311,7 @@ final class EmulatorSession: ObservableObject {
         self.game = game
         lidClosed = false
         runner.resetTiming()
+        startBookmarkTimer()
         applySettings()
     }
 
@@ -352,6 +353,7 @@ final class EmulatorSession: ObservableObject {
 
     /// Stops emulation and unloads the ROM (the battery save is flushed).
     func stop() {
+        stopBookmarkTimer()
         runner.running = false
         runner.paused = false
         isRunning = false
@@ -429,6 +431,70 @@ final class EmulatorSession: ObservableObject {
     func writeSuspendState() {
         guard let game, isRunning else { return }
         _ = runner.withCore { $0.saveState(to: FileLocations.suspendState(gameID: game.id)) }
+    }
+
+    // MARK: Bookmarks
+
+    private var bookmarkTimer: Timer?
+    private var lastBookmark: Date?
+    private var bookmarkBootedAt = Date()
+    /// Fired on the main thread after every automatic capture (AppModel uses
+    /// it for the one-time discovery toast).
+    var onBookmarkCaptured: (() -> Void)?
+
+    /// Started on every game load; checks twice a minute whether the next
+    /// bookmark is due.
+    private func startBookmarkTimer() {
+        bookmarkTimer?.invalidate()
+        lastBookmark = nil
+        bookmarkBootedAt = Date()
+        let t = Timer(timeInterval: 30, repeats: true) { [weak self] _ in self?.bookmarkTick() }
+        t.tolerance = 5
+        RunLoop.main.add(t, forMode: .common)
+        bookmarkTimer = t
+    }
+
+    private func stopBookmarkTimer() {
+        bookmarkTimer?.invalidate()
+        bookmarkTimer = nil
+    }
+
+    private func bookmarkTick() {
+        guard isRunning, !isPaused, game != nil, settings.bookmarksEnabled else { return }
+        let interval = Double(max(1, settings.bookmarkMinutes)) * 60
+        if let last = lastBookmark {
+            if Date().timeIntervalSince(last) >= interval { captureBookmark() }
+        } else if Date().timeIntervalSince(bookmarkBootedAt) >= 20 {
+            // The first bookmark of a session lands shortly after boot.
+            captureBookmark()
+        }
+    }
+
+    /// Slips one bookmark in (compressed state + top-screen thumbnail). Also
+    /// used by the sheet's capture pill and on game exit.
+    @discardableResult
+    func captureBookmark() -> Bool {
+        guard let game, isRunning else { return false }
+        let (state, pixels) = runner.withCore { core -> (Data?, Data) in
+            (core.serializeState(), core.copyTopScreenData())
+        }
+        guard let state else { return false }
+        lastBookmark = Date()
+        let id = game.id
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard BookmarkStore.shared.write(state: state, thumbnail: pixels, gameID: id) != nil else { return }
+            BookmarkStore.shared.thinIfNeeded(gameID: id)
+            DispatchQueue.main.async { self?.onBookmarkCaptured?() }
+        }
+        return true
+    }
+
+    /// Reopens a bookmark's page.
+    func loadBookmark(_ bookmark: Bookmark) -> Bool {
+        guard let state = BookmarkStore.shared.state(of: bookmark) else { return false }
+        let ok = runner.withCore { $0.deserializeState(state) }
+        if ok { audio.reset() }
+        return ok
     }
 
     func flushSaveData() {

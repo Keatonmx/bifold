@@ -103,6 +103,7 @@ struct RootView: View {
                 switch sheet {
                 case .quickMenu: QuickMenuSheet()
                 case .saveStates: SaveStatesSheet()
+                case .bookmarks: BookmarksSheet()
                 case .settings: SettingsSheet()
                 case .gameActions: GameActionsSheet()
                 case .about: AboutSheet()
