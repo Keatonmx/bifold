@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.mp3 binary
+*.sh text eol=lf
+*.py text eol=lf
+*.swift text eol=lf
+*.pbxproj text eol=lf

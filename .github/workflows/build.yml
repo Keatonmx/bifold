@@ -1,0 +1,177 @@
+name: Build Bifold
+
+# Runs on GitHub's free macOS runners — the Mac you don't have.
+#   • builds the melonDS core as an xcframework (cached between runs)
+#   • compiles the app for the iOS Simulator and for devices
+#   • boots a simulator, launches Bifold, takes screenshots
+#   • uploads an UNSIGNED .ipa you can sign + install from Windows with Sideloadly
+#
+# Optional: set a repository variable TEST_ROM_URL (Settings › Secrets and
+# variables › Actions › Variables) pointing at a .nds you own; the simulator
+# run then auto-opens it so screenshots show the core running.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # for the rolling "latest" release
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      SCHEME: Bifold
+      BUNDLE_ID: com.redfernsoutpost.bifold
+      DERIVED: ${{ github.workspace }}/DerivedData
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app 2>/dev/null || sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          xcodebuild -version
+          cmake --version | head -n 1
+
+      - name: Cache melonDS xcframework
+        id: melonds-cache
+        uses: actions/cache@v4
+        with:
+          path: Vendor/melonds-dist
+          key: melonds-dist-${{ runner.os }}-${{ hashFiles('Scripts/build-melonds.sh') }}-v1
+
+      - name: Build melonDS core (ios-arm64 + simulator)
+        if: steps.melonds-cache.outputs.cache-hit != 'true'
+        run: |
+          chmod +x Scripts/build-melonds.sh
+          Scripts/build-melonds.sh 2>&1 | tee melonds-build.log | tail -n 40
+          ls -la Vendor/melonds-dist/melonds.xcframework
+
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Bifold.xcodeproj -scheme "$SCHEME" -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee xcodebuild-simulator.log | (grep -E "error:|BUILD " || true)
+          test -x "$DERIVED/Build/Products/Debug-iphonesimulator/Bifold.app/Bifold"
+
+      - name: Simulator smoke test + screenshots
+        continue-on-error: true
+        env:
+          TEST_ROM_URL: ${{ vars.TEST_ROM_URL }}
+        run: |
+          APP="$DERIVED/Build/Products/Debug-iphonesimulator/Bifold.app"
+          UDID=$(xcrun simctl list devices available -j | jq -r '
+            .devices | to_entries[] | select(.key | contains("iOS")) | .value[]
+            | select(.name | test("^iPhone (16|15) Pro$")) | .udid' | head -n 1)
+          if [ -z "$UDID" ]; then
+            UDID=$(xcrun simctl list devices available -j | jq -r '
+              .devices | to_entries[] | select(.key | contains("iOS")) | .value[]
+              | select(.name | test("^iPhone")) | .udid' | head -n 1)
+          fi
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          mkdir -p screenshots
+
+          # shot <name> [launch args…]: relaunch with the Debug-only arguments,
+          # wait for the screen to settle, capture.
+          shot() {
+            local name="$1"; shift
+            xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BUNDLE_ID" "$@" > "screenshots/launch-$name.log" 2>&1
+            sleep "${SHOT_DELAY:-8}"
+            xcrun simctl io "$UDID" screenshot "screenshots/$name.png"
+          }
+
+          # Fresh install, no ROMs.
+          SHOT_DELAY=6 shot 01-library-empty
+          SHOT_DELAY=6 shot 02-settings -bifold-sheet settings
+          SHOT_DELAY=6 shot 03-about -bifold-sheet about
+          SHOT_DELAY=6 shot 04-library-wallet -bifold-theme Wallet
+          SHOT_DELAY=6 shot 05-library-plum -bifold-theme Plum
+
+          # In-game shots need a ROM (repository variable TEST_ROM_URL).
+          if [ -n "$TEST_ROM_URL" ]; then
+            CONTAINER=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)
+            mkdir -p "$CONTAINER/Documents/ROMs"
+            curl -fsSL "$TEST_ROM_URL" -o "$CONTAINER/Documents/ROMs/test-rom.nds"
+            shot 06-ingame -bifold-autoplay
+            sleep 4
+            xcrun simctl io "$UDID" screenshot screenshots/07-ingame-later.png
+            SHOT_DELAY=9 shot 08-landscape -bifold-autoplay -bifold-landscape
+            shot 09-quickmenu -bifold-autoplay -bifold-sheet quickMenu
+            shot 10-save-states -bifold-autoplay -bifold-sheet saveStates
+            shot 11-swapped -bifold-autoplay -bifold-swap
+            SHOT_DELAY=6 shot 12-library
+            SHOT_DELAY=6 shot 13-game-actions -bifold-sheet gameActions
+          fi
+
+          xcrun simctl spawn "$UDID" log show --last 120s --predicate 'process == "Bifold"' > screenshots/device.log 2>/dev/null || true
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+
+      - name: Build for device (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Bifold.xcodeproj -scheme "$SCHEME" -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee xcodebuild-device.log | (grep -E "error:|BUILD " || true)
+          APP="$DERIVED/Build/Products/Release-iphoneos/Bifold.app"
+          test -x "$APP/Bifold"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../Bifold-unsigned.ipa Payload)
+          ls -la Bifold-unsigned.ipa
+
+      - name: Upload IPA (sign with Sideloadly on Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bifold-unsigned-ipa
+          path: Bifold-unsigned.ipa
+          retention-days: 30
+
+      - name: Publish rolling "latest" release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp Bifold-unsigned.ipa "Bifold-unsigned-build${{ github.run_number }}.ipa"
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest "Bifold-unsigned-build${{ github.run_number }}.ipa" \
+            --title "Latest build (#${{ github.run_number }})" \
+            --notes "Unsigned IPA from ${{ github.sha }}. Sign and install with Sideloadly." \
+            --latest
+
+      - name: Upload simulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            melonds-build.log
+            xcodebuild-simulator.log
+            xcodebuild-device.log
+          if-no-files-found: ignore

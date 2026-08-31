@@ -1,0 +1,265 @@
+//
+//  GameView.swift
+//  Bifold
+//
+//  In-game screen. Portrait stacks the two DS screens above the controls;
+//  landscape puts them side by side under a translucent overlay. The screen
+//  showing the DS touch screen carries the stylus catcher, wherever it is.
+//
+
+import SwiftUI
+
+struct GameContainerView: View {
+    var body: some View {
+        // The reader respects the safe area so its insets are SwiftUI's own.
+        GeometryReader { geo in
+            let insets = geo.safeAreaInsets
+            let full = CGSize(width: geo.size.width + insets.leading + insets.trailing,
+                              height: geo.size.height + insets.top + insets.bottom)
+            if full.width > full.height {
+                // Landscape is full-bleed: draw at the real screen size, shifted
+                // back over the insets.
+                LandscapeGameView(size: full, safeArea: insets)
+                    .frame(width: full.width, height: full.height)
+                    .offset(x: -insets.leading, y: -insets.top)
+            } else {
+                PortraitGameView()
+            }
+        }
+    }
+}
+
+/// One DS screen with its frame store; the touch screen also catches the stylus.
+private struct DSScreenView: View {
+    @EnvironmentObject private var session: EmulatorSession
+    let store: FrameStore
+    let filter: ScreenFilter
+    let isTouchScreen: Bool
+    var cornerRadius: CGFloat = 6
+
+    var body: some View {
+        EmulatorScreen(frameStore: store, filter: filter)
+            .aspectRatio(4.0 / 3.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(Palette.hairline06, lineWidth: 1))
+            .overlay {
+                if isTouchScreen {
+                    TouchScreenCatcher { point in
+                        session.setStylus(point)
+                    }
+                }
+            }
+    }
+}
+
+// MARK: - Portrait
+
+struct PortraitGameView: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var session: EmulatorSession
+    @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Boot flourish: the clamshell unfolds — both screens hinge open from
+    /// the gap between them.
+    @State private var unfolded = false
+
+    private let metrics = ControlMetrics(isLandscape: false)
+    private let minControlsHeight: CGFloat = 214
+
+    var body: some View {
+        GeometryReader { geo in
+            let gap = model.settings.screenGap.points
+            // Screens fit the width unless the controls would be squeezed.
+            let maxByHeight = (geo.size.height - 52 - minControlsHeight - gap - 30) / 1.5
+            let screenWidth = max(200, min(geo.size.width - 20, maxByHeight))
+            VStack(spacing: 0) {
+                topBar
+                screenBand(width: screenWidth, gap: gap)
+                controlsArea
+            }
+        }
+        .background(theme.bg.ignoresSafeArea())
+    }
+
+    private var topBar: some View {
+        HStack {
+            CircleIconButton(size: 40, action: { model.exitGame() }) {
+                ChevronShape(direction: .left)
+                    .stroke(Palette.text80, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                    .frame(width: 10, height: 17)
+            }
+            Spacer()
+            Text(model.currentGame?.title ?? "Game")
+                .font(Typography.cardTitle)
+                .tracking(-0.2)
+                .foregroundColor(.white)
+                .lineLimit(1)
+            Spacer()
+            HStack(spacing: 8) {
+                if let label = session.speedBadgeLabel {
+                    FFBadge(label: label)
+                }
+            }
+            .frame(minWidth: 40, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+    }
+
+    private func screenBand(width: CGFloat, gap: CGFloat) -> some View {
+        let swap = model.settings.swapScreens
+        return VStack(spacing: gap) {
+            DSScreenView(store: swap ? session.bottomStore : session.topStore,
+                         filter: model.settings.filter,
+                         isTouchScreen: swap)
+                .rotation3DEffect(.degrees(unfolded ? 0 : -68), axis: (x: 1, y: 0, z: 0),
+                                  anchor: .bottom, perspective: 0.5)
+            DSScreenView(store: swap ? session.topStore : session.bottomStore,
+                         filter: model.settings.filter,
+                         isTouchScreen: !swap)
+                .rotation3DEffect(.degrees(unfolded ? 0 : 68), axis: (x: 1, y: 0, z: 0),
+                                  anchor: .top, perspective: 0.5)
+        }
+        .frame(width: width)
+        .opacity(unfolded ? 1 : 0.35)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .overlay {
+            if session.lidClosed {
+                lidOverlay
+            }
+        }
+        .onAppear {
+            if session.foldShown || !model.settings.bootAnimationEnabled || reduceMotion {
+                unfolded = true          // off, Reduce Motion, rotation or menu return
+                session.foldShown = true
+            } else {
+                session.foldShown = true
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.82).delay(0.12)) {
+                    unfolded = true
+                }
+            }
+        }
+    }
+
+    /// Closing the lid puts the game to sleep; a tap wakes it back up.
+    private var lidOverlay: some View {
+        Button {
+            ButtonHaptics.shared.tap()
+            session.openLid()
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(theme.well.opacity(0.97))
+                VStack(spacing: 8) {
+                    Text("zZz")
+                        .font(.system(size: 26, weight: .bold, design: .monospaced))
+                        .foregroundColor(theme.accentText)
+                    Text("Lid closed · tap to open")
+                        .font(Typography.meta13)
+                        .foregroundColor(Palette.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 8)
+    }
+
+    private var controlsArea: some View {
+        GeometryReader { geo in
+            TouchControlsView(layout: .portraitDefault,
+                              metrics: metrics,
+                              size: geo.size,
+                              showBlow: model.settings.showMicButton,
+                              onKeys: { session.setTouchKeys($0) },
+                              onMenu: { model.openSheet(.quickMenu) },
+                              onMic: { session.setMicHeld($0) })
+        }
+        .padding(.top, 8)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 10)
+    }
+}
+
+// MARK: - Landscape
+
+struct LandscapeGameView: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var session: EmulatorSession
+    @Environment(\.theme) private var theme
+    /// Full screen size (safe area ignored).
+    let size: CGSize
+    let safeArea: EdgeInsets
+
+    private let metrics = ControlMetrics(isLandscape: true)
+
+    /// Controls live inside the safe insets so nothing sits under the Dynamic
+    /// Island, the rounded corners or the home indicator.
+    private var controlsRect: CGRect {
+        CGRect(x: safeArea.leading,
+               y: 0,
+               width: size.width - safeArea.leading - safeArea.trailing,
+               height: size.height - safeArea.bottom)
+    }
+
+    var body: some View {
+        let swap = model.settings.swapScreens
+        ZStack(alignment: .topLeading) {
+            Color.black
+
+            // Two screens side by side, centred, as large as the height allows.
+            HStack(spacing: 8) {
+                DSScreenView(store: swap ? session.bottomStore : session.topStore,
+                             filter: model.settings.filter,
+                             isTouchScreen: swap,
+                             cornerRadius: 4)
+                DSScreenView(store: swap ? session.topStore : session.bottomStore,
+                             filter: model.settings.filter,
+                             isTouchScreen: !swap,
+                             cornerRadius: 4)
+            }
+            .frame(width: size.width, height: size.height)
+
+            // Overlay controls at the configured opacity.
+            TouchControlsView(layout: .landscapeDefault,
+                              metrics: metrics,
+                              size: controlsRect.size,
+                              showBlow: model.settings.showMicButton,
+                              onKeys: { session.setTouchKeys($0) },
+                              onMenu: { model.openSheet(.quickMenu) },
+                              onMic: { session.setMicHeld($0) })
+                .opacity(model.settings.controlOpacity)
+                .frame(width: controlsRect.width, height: controlsRect.height)
+                .offset(x: controlsRect.minX, y: controlsRect.minY)
+
+            // Speed badge sits left of the top-centre MENU pill.
+            if let label = session.speedBadgeLabel {
+                FFBadge(label: label)
+                    .position(x: size.width * 0.5 - 110, y: max(24, safeArea.top + 6) + 12)
+            }
+
+            if session.lidClosed {
+                Button {
+                    ButtonHaptics.shared.tap()
+                    session.openLid()
+                } label: {
+                    ZStack {
+                        Color.black.opacity(0.88)
+                        VStack(spacing: 8) {
+                            Text("zZz")
+                                .font(.system(size: 26, weight: .bold, design: .monospaced))
+                                .foregroundColor(theme.accentText)
+                            Text("Lid closed · tap to open")
+                                .font(Typography.meta13)
+                                .foregroundColor(Palette.textTertiary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(width: size.width, height: size.height)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+}

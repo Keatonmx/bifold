@@ -1,0 +1,13 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# melonDS checkout + build outputs (Scripts/build-melonds.sh recreates all of these)
+Vendor/melonds/
+Vendor/build/
+Vendor/melonds-dist/
+
+# macOS
+.DS_Store
