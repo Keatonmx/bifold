@@ -77,8 +77,11 @@ struct SettingsSheet: View {
                         SettingsRow(title: "Screen gap", subtitle: "Space between the screens in portrait") {
                             SegmentedPill(options: ScreenGap.allCases, label: { $0.rawValue }, selection: $model.settings.screenGap)
                         }
-                        SettingsRow(title: "Swap screens", subtitle: "Touch screen on top instead", showsSeparator: false) {
+                        SettingsRow(title: "Swap screens", subtitle: "Touch screen on top instead") {
                             BifoldToggle(isOn: $model.settings.swapScreens)
+                        }
+                        SettingsRow(title: "Book mode", subtitle: "Sideways games · hold the phone landscape", showsSeparator: false) {
+                            SegmentedPill(options: BookMode.allCases, label: { $0.rawValue }, selection: $model.settings.bookMode)
                         }
                     }
                 }
@@ -88,8 +91,11 @@ struct SettingsSheet: View {
                         SettingsRow(title: "Tap offset", subtitle: "Land taps a little above your fingertip") {
                             SegmentedPill(options: StylusOffset.allCases, label: { $0.rawValue }, selection: $model.settings.stylusOffset)
                         }
-                        SettingsRow(title: "Marker", subtitle: "What shows where the tap lands", showsSeparator: false) {
+                        SettingsRow(title: "Marker", subtitle: "What shows where the tap lands") {
                             SegmentedPill(options: StylusStyle.allCases, label: { $0.rawValue }, selection: $model.settings.stylusStyle)
+                        }
+                        SettingsRow(title: "Contact haptic", subtitle: "A soft tick when the stylus touches down", showsSeparator: false) {
+                            BifoldToggle(isOn: $model.settings.stylusHaptic)
                         }
                     }
                 }

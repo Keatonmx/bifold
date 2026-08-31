@@ -19,6 +19,9 @@ struct RendererUniforms {
     var outputSize: SIMD2<Float>
     var filter: Int32
     var opacity: Float
+    /// 0 = upright, 1 = book righty (device turned CCW), 2 = book lefty (CW).
+    var rotation: Int32
+    var padding: Int32 = 0
 }
 
 final class MetalRenderer: NSObject, MTKViewDelegate {
@@ -32,6 +35,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     var filter: ScreenFilter = .none
     /// Stretch to the whole view instead of aspect-fitting (the Fill option).
     var stretch = false
+    /// Book mode: 0 upright, 1 turned CCW (righty), 2 turned CW (lefty).
+    var rotation = 0
     var clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
 
     init?(frameStore: FrameStore) {
@@ -98,8 +103,9 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private func makeUniforms(drawableSize: CGSize) -> RendererUniforms {
         let viewW = Float(max(drawableSize.width, 1))
         let viewH = Float(max(drawableSize.height, 1))
-        let texW = Float(frameStore.width)
-        let texH = Float(frameStore.height)
+        // In book mode the displayed frame is the texture turned 90°.
+        let texW = rotation == 0 ? Float(frameStore.width) : Float(frameStore.height)
+        let texH = rotation == 0 ? Float(frameStore.height) : Float(frameStore.width)
         let quadW: Float
         let quadH: Float
         if stretch {
@@ -112,9 +118,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         }
         return RendererUniforms(
             quadScale: SIMD2<Float>(quadW / viewW, quadH / viewH),
-            textureSize: SIMD2<Float>(texW, texH),
+            textureSize: SIMD2<Float>(Float(frameStore.width), Float(frameStore.height)),
             outputSize: SIMD2<Float>(quadW, quadH),
             filter: filter.shaderIndex,
-            opacity: 1)
+            opacity: 1,
+            rotation: Int32(rotation))
     }
 }

@@ -120,6 +120,9 @@ final class AppModel: ObservableObject {
         if args.contains("-bifold-ffbutton") {
             self.settings.showFastForwardButton = true
         }
+        if args.contains("-bifold-book") {
+            self.settings.bookMode = .rightHanded
+        }
         if let i = args.firstIndex(of: "-bifold-sheet"), i + 1 < args.count {
             let name = args[i + 1]
             // In-game sheets need the ROM booted first (autoplay opens it at 0.5 s).
@@ -394,6 +397,20 @@ final class AppModel: ObservableObject {
     func toggleSwapScreens() {
         settings.swapScreens.toggle()
         showToast(settings.swapScreens ? "Touch screen on top" : "Touch screen below")
+    }
+
+    /// Quick Menu: cycle Off → Righty → Lefty.
+    func cycleBookMode() {
+        switch settings.bookMode {
+        case .off: settings.bookMode = .rightHanded
+        case .rightHanded: settings.bookMode = .leftHanded
+        case .leftHanded: settings.bookMode = .off
+        }
+        switch settings.bookMode {
+        case .off: showToast("Book mode off")
+        case .rightHanded: showToast("Book mode · touch page on the right")
+        case .leftHanded: showToast("Book mode · touch page on the left")
+        }
     }
 
     func setSpeed(_ speed: Double) {

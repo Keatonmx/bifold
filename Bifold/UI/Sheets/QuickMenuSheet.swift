@@ -69,6 +69,10 @@ struct QuickMenuSheet: View {
             // Navigation
             Card {
                 NavRow(title: "All save states", detail: "\(model.gameData.slots.filter(\.isFilled).count) of \(SaveSlot.count) used") { model.openSheet(.saveStates) }
+                NavRow(title: "Book mode", subtitle: "Sideways games · hold the phone landscape",
+                       detail: model.settings.bookMode.rawValue, showsChevron: false) {
+                    model.cycleBookMode()
+                }
                 NavRow(title: "Close the lid", subtitle: "Most games doze off until it opens", showsChevron: false) {
                     session.toggleLid()
                     model.closeSheet()

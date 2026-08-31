@@ -16,6 +16,8 @@ struct Uniforms {
     float2 outputSize;    // on-screen pixels covered by the quad
     int    filter;
     float  opacity;
+    int    rotation;      // 0 upright, 1 book righty (CCW), 2 book lefty (CW)
+    int    padding;
 };
 
 struct VertexOut {
@@ -33,13 +35,37 @@ vertex VertexOut bifold_vertex(uint vid [[vertex_id]],
     float2 p = corners[vid];
     VertexOut out;
     out.position = float4(p * u.quadScale, 0, 1);
-    out.uv = float2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);
+    float2 uv = float2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);
+    // Book mode: the view shows the DS frame turned 90°, so sample rotated.
+    if (u.rotation == 1) {
+        uv = float2(1.0 - uv.y, uv.x);
+    } else if (u.rotation == 2) {
+        uv = float2(uv.y, 1.0 - uv.x);
+    }
+    out.uv = uv;
     return out;
 }
 
 static inline float4 tex_nearest(texture2d<float> tex, float2 uv) {
     constexpr sampler s(coord::normalized, filter::nearest, address::clamp_to_edge);
     return tex.sample(s, uv);
+}
+
+static inline float4 tex_linear(texture2d<float> tex, float2 uv) {
+    constexpr sampler s(coord::normalized, filter::linear, address::clamp_to_edge);
+    return tex.sample(s, uv);
+}
+
+/// Sharp-bilinear: nearest-neighbour crispness with a one-output-pixel
+/// bilinear transition at texel edges, so pixels stay square without the
+/// shimmer of pure nearest at non-integer scales.
+static float4 sharp_bilinear(texture2d<float> tex, float2 uv, float2 texSize, float2 outSize) {
+    float2 scale = max(outSize / texSize, float2(1.0, 1.0));
+    float2 pos = uv * texSize - 0.5;
+    float2 base = floor(pos);
+    float2 f = pos - base;
+    float2 fs = clamp((f - 0.5) * scale + 0.5, 0.0, 1.0);
+    return tex_linear(tex, (base + 0.5 + fs) / texSize);
 }
 
 // ---- xBR (level 2, no-blend) — after Hyllian's xBR-lv2 shader -------------
@@ -118,6 +144,8 @@ fragment float4 bifold_fragment(VertexOut in [[stage_in]],
     float4 color;
     if (u.filter == 4) {
         color = xbr(tex, in.uv, u.textureSize);
+    } else if (u.filter == 5) {
+        color = sharp_bilinear(tex, in.uv, u.textureSize, u.outputSize);
     } else {
         color = tex_nearest(tex, in.uv);
     }

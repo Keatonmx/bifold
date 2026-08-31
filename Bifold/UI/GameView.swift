@@ -39,14 +39,16 @@ private struct DSScreenView: View {
     var cornerRadius: CGFloat = 6
     /// Fill mode: stretch into whatever frame the layout gives, no 4:3 lock.
     var fill: Bool = false
+    /// Book mode rotation (0 upright, 1 righty, 2 lefty): pages are 3:4.
+    var bookRotation: Int = 0
 
     var body: some View {
         Group {
             if fill {
-                EmulatorScreen(frameStore: store, filter: filter, stretch: true)
+                EmulatorScreen(frameStore: store, filter: filter, stretch: true, rotation: bookRotation)
             } else {
-                EmulatorScreen(frameStore: store, filter: filter)
-                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                EmulatorScreen(frameStore: store, filter: filter, rotation: bookRotation)
+                    .aspectRatio(bookRotation == 0 ? 4.0 / 3.0 : 3.0 / 4.0, contentMode: .fit)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -55,7 +57,9 @@ private struct DSScreenView: View {
             if isTouchScreen {
                 TouchScreenCatcher(onStylus: { point in session.setStylus(point) },
                                    offsetDSPixels: model.settings.stylusOffset.dsPixels,
-                                   style: model.settings.stylusStyle)
+                                   style: model.settings.stylusStyle,
+                                   rotation: bookRotation,
+                                   hapticOnContact: model.settings.stylusHaptic)
             }
         }
     }
@@ -270,26 +274,33 @@ struct LandscapeGameView: View {
     }
 
     var body: some View {
-        let swap = model.settings.swapScreens
+        let book = model.settings.bookMode
+        // Book pages: both screens turned the same way; righty reads
+        // top-screen-left / touch-right, lefty the mirror. Swap is a
+        // non-book concept, so book mode ignores it.
+        let swap = book == .off ? model.settings.swapScreens : (book == .leftHanded)
         let fill = model.settings.screenFit == .fill
+        let rotation = book.rotation
         ZStack(alignment: .topLeading) {
             Color.black
 
             // Two screens side by side, centred, as large as the height allows
             // (Fill hands each exactly half the display).
-            HStack(spacing: 8) {
+            HStack(spacing: book == .off ? 8 : 14) {
                 DSScreenView(store: swap ? session.bottomStore : session.topStore,
                              filter: model.settings.filter,
                              isTouchScreen: swap,
                              cornerRadius: 4,
-                             fill: fill)
+                             fill: fill,
+                             bookRotation: rotation)
                     .frame(width: fill ? (size.width - 8) / 2 : nil,
                            height: fill ? size.height : nil)
                 DSScreenView(store: swap ? session.topStore : session.bottomStore,
                              filter: model.settings.filter,
                              isTouchScreen: !swap,
                              cornerRadius: 4,
-                             fill: fill)
+                             fill: fill,
+                             bookRotation: rotation)
                     .frame(width: fill ? (size.width - 8) / 2 : nil,
                            height: fill ? size.height : nil)
             }

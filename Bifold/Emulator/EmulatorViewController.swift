@@ -41,27 +41,29 @@ final class EmulatorViewController: UIViewController {
         self.view = view
     }
 
-    func apply(filter: ScreenFilter, stretch: Bool) {
+    func apply(filter: ScreenFilter, stretch: Bool, rotation: Int) {
         renderer?.filter = filter
         renderer?.stretch = stretch
+        renderer?.rotation = rotation
     }
 }
 
-/// SwiftUI wrapper for one DS screen. Give it a 4:3 frame (or any frame
-/// with `stretch`).
+/// SwiftUI wrapper for one DS screen. Give it a 4:3 frame (3:4 in book
+/// mode, or any frame with `stretch`).
 struct EmulatorScreen: UIViewControllerRepresentable {
     let frameStore: FrameStore
     var filter: ScreenFilter
     var stretch: Bool = false
+    var rotation: Int = 0
 
     func makeUIViewController(context: Context) -> EmulatorViewController {
         let vc = EmulatorViewController(frameStore: frameStore)
-        vc.apply(filter: filter, stretch: stretch)
+        vc.apply(filter: filter, stretch: stretch, rotation: rotation)
         return vc
     }
 
     func updateUIViewController(_ vc: EmulatorViewController, context: Context) {
-        vc.apply(filter: filter, stretch: stretch)
+        vc.apply(filter: filter, stretch: stretch, rotation: rotation)
     }
 }
 
@@ -76,6 +78,8 @@ struct TouchScreenCatcher: UIViewRepresentable {
     let onStylus: ((x: Int, y: Int)?) -> Void
     var offsetDSPixels: Int = 0
     var style: StylusStyle = .ring
+    var rotation: Int = 0
+    var hapticOnContact: Bool = false
 
     func makeUIView(context: Context) -> StylusView {
         let view = StylusView()
@@ -93,6 +97,8 @@ struct TouchScreenCatcher: UIViewRepresentable {
         view.onStylus = onStylus
         view.offsetDSPixels = offsetDSPixels
         view.style = style
+        view.rotation = rotation
+        view.hapticOnContact = hapticOnContact
     }
 }
 
@@ -101,6 +107,9 @@ final class StylusView: UIView {
     /// Vertical offset in DS pixels: the tap lands this far above the finger.
     var offsetDSPixels: Int = 0
     var style: StylusStyle = .ring
+    /// Book mode: 0 upright, 1 device turned CCW (righty), 2 CW (lefty).
+    var rotation: Int = 0
+    var hapticOnContact = false
 
     private var activeTouch: UITouch?
     private let cursor = CAShapeLayer()
@@ -152,6 +161,7 @@ final class StylusView: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard activeTouch == nil, let touch = touches.first else { return }
         activeTouch = touch
+        if hapticOnContact { ButtonHaptics.shared.tick() }
         report(touch)
     }
 
@@ -179,7 +189,7 @@ final class StylusView: UIView {
     private func report(_ touch: UITouch) {
         guard bounds.width > 0, bounds.height > 0 else { return }
         var p = touch.location(in: self)
-        p.y -= CGFloat(offsetDSPixels) * bounds.height / 192
+        p.y -= CGFloat(offsetDSPixels) * bounds.height / (rotation == 0 ? 192 : 256)
         // The offset must not let the pen slide off the digitiser's top edge.
         p.y = max(0, min(bounds.height, p.y))
         switch style {
@@ -192,8 +202,21 @@ final class StylusView: UIView {
             pen.position = p
             pen.isHidden = false
         }
-        let x = Int((p.x / bounds.width) * 256)
-        let y = Int((p.y / bounds.height) * 192)
+        let u = p.x / bounds.width
+        let v = p.y / bounds.height
+        let x: Int
+        let y: Int
+        switch rotation {
+        case 1:   // device turned CCW: view right = DS down, view down = DS left
+            x = Int((1 - v) * 256)
+            y = Int(u * 192)
+        case 2:   // device turned CW
+            x = Int(v * 256)
+            y = Int((1 - u) * 192)
+        default:
+            x = Int(u * 256)
+            y = Int(v * 192)
+        }
         onStylus?((x: min(255, max(0, x)), y: min(191, max(0, y))))
     }
 }

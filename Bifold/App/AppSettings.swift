@@ -18,13 +18,15 @@ enum LibrarySort: String, CaseIterable, Codable, Identifiable {
 
 enum ScreenFilter: String, CaseIterable, Codable, Identifiable {
     case none = "None"
+    /// Sharp-bilinear: crisp pixels without shimmer at non-integer scales.
+    case crisp = "Crisp"
     case crt = "CRT"
     case grid = "Grid"
     /// Edge-directed upscaler (xBR-lv2).
     case xbr = "xBR"
     var id: String { rawValue }
 
-    static let options: [ScreenFilter] = [.none, .crt, .grid, .xbr]
+    static let options: [ScreenFilter] = [.none, .crisp, .crt, .grid, .xbr]
 
     /// Index passed to the Metal fragment shader.
     var shaderIndex: Int32 {
@@ -33,6 +35,26 @@ enum ScreenFilter: String, CaseIterable, Codable, Identifiable {
         case .crt: return 1
         case .grid: return 2
         case .xbr: return 4
+        case .crisp: return 5
+        }
+    }
+}
+
+/// Sideways "book" games (Brain Age, Hotel Dusk): both screens rotate 90°
+/// into facing pages. Righty puts the touch page on the right.
+enum BookMode: String, CaseIterable, Codable, Identifiable {
+    case off = "Off"
+    case rightHanded = "Righty"
+    case leftHanded = "Lefty"
+    var id: String { rawValue }
+
+    /// Renderer/stylus rotation: 1 = device turned counter-clockwise (righty),
+    /// 2 = clockwise (lefty).
+    var rotation: Int {
+        switch self {
+        case .off: return 0
+        case .rightHanded: return 1
+        case .leftHanded: return 2
         }
     }
 }
@@ -144,6 +166,8 @@ struct AppSettings: Codable, Equatable {
     var filter: ScreenFilter = .none
     var screenFit: ScreenFit = .aspect
     var screenGap: ScreenGap = .slim
+    /// Landscape becomes two facing book pages for sideways games.
+    var bookMode: BookMode = .off
     /// Bottom screen rendered on top (portrait) / left (landscape).
     var swapScreens: Bool = false
     var portraitLayout: PortraitLayout = .balanced
@@ -152,6 +176,8 @@ struct AppSettings: Codable, Equatable {
     var stylusOffset: StylusOffset = .off
     /// Marker at the tap point: nothing, a ring, or a drawn DS stylus.
     var stylusStyle: StylusStyle = .ring
+    /// Haptic tick when the stylus makes contact.
+    var stylusHaptic: Bool = false
 
     // Controls
     var hapticsEnabled: Bool = true
@@ -190,10 +216,12 @@ struct AppSettings: Codable, Equatable {
         filter = try c.decodeIfPresent(ScreenFilter.self, forKey: .filter) ?? d.filter
         screenFit = try c.decodeIfPresent(ScreenFit.self, forKey: .screenFit) ?? d.screenFit
         screenGap = try c.decodeIfPresent(ScreenGap.self, forKey: .screenGap) ?? d.screenGap
+        bookMode = try c.decodeIfPresent(BookMode.self, forKey: .bookMode) ?? d.bookMode
         swapScreens = try c.decodeIfPresent(Bool.self, forKey: .swapScreens) ?? d.swapScreens
         portraitLayout = try c.decodeIfPresent(PortraitLayout.self, forKey: .portraitLayout) ?? d.portraitLayout
         stylusOffset = try c.decodeIfPresent(StylusOffset.self, forKey: .stylusOffset) ?? d.stylusOffset
         stylusStyle = try c.decodeIfPresent(StylusStyle.self, forKey: .stylusStyle) ?? d.stylusStyle
+        stylusHaptic = try c.decodeIfPresent(Bool.self, forKey: .stylusHaptic) ?? d.stylusHaptic
         hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? d.hapticsEnabled
         pressGlow = try c.decodeIfPresent(PressGlow.self, forKey: .pressGlow) ?? d.pressGlow
         controlOpacity = try c.decodeIfPresent(Double.self, forKey: .controlOpacity) ?? d.controlOpacity
