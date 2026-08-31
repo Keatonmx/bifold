@@ -44,14 +44,20 @@ struct TouchControlsView: View {
         let effective = TouchControlsView.isPlausible(size) ? size : stableSize
         let frames = ControlGeometry.frames(layout: layout, metrics: metrics, in: effective, showBlow: showBlow)
         ZStack(alignment: .topLeading) {
-            ForEach(ControlID.allCases) { control in
-                if let frame = frames[control] {
-                    ControlSlot(control: control, metrics: metrics, press: press)
-                        .frame(width: frame.width, height: frame.height)
-                        .scaleEffect(CGFloat(layout[control].scale), anchor: .center)
-                        .position(x: frame.midX, y: frame.midY)
+            // Purely visual; the UIKit layer below does all input. They must
+            // never swallow touches, or the stylus screen underneath (landscape
+            // overlays the game) goes deaf.
+            Group {
+                ForEach(ControlID.allCases) { control in
+                    if let frame = frames[control] {
+                        ControlSlot(control: control, metrics: metrics, press: press)
+                            .frame(width: frame.width, height: frame.height)
+                            .scaleEffect(CGFloat(layout[control].scale), anchor: .center)
+                            .position(x: frame.midX, y: frame.midY)
+                    }
                 }
             }
+            .allowsHitTesting(false)
             MultiTouchInputView(frames: frames,
                                 dpadSize: metrics.dpad * CGFloat(layout[.dpad].scale),
                                 onKeys: { [press] keys, highlight in
@@ -168,6 +174,13 @@ final class TouchLayerView: UIView {
 
     /// Extra slop around each control so a finger that drifts slightly keeps the button held.
     private let slop: CGFloat = 14
+
+    /// Claim only touches that land on a control. Everything else falls
+    /// through to whatever is underneath — in landscape that is the DS touch
+    /// screen, which must keep receiving the stylus.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        control(at: point, slop: 0) != nil
+    }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {

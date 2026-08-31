@@ -132,8 +132,8 @@ struct ControlLayout: Codable, Equatable {
     /// hardware), L/R pills in the top corners, MIC between the clusters,
     /// SELECT · MENU · START along the bottom.
     static let portraitDefault = ControlLayout(placements: [
-        .l:      ControlPlacement(x: 0.12, y: 0.09),
-        .r:      ControlPlacement(x: 0.88, y: 0.09),
+        .l:      ControlPlacement(x: 0.12, y: 0.08),
+        .r:      ControlPlacement(x: 0.88, y: 0.08),
         .dpad:   ControlPlacement(x: 0.20, y: 0.50),
         .x:      ControlPlacement(x: 0.795, y: 0.26),
         .y:      ControlPlacement(x: 0.645, y: 0.48),

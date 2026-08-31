@@ -65,49 +65,23 @@ struct PortraitGameView: View {
     @State private var unfolded = false
 
     private let metrics = ControlMetrics(isLandscape: false)
-    private let minControlsHeight: CGFloat = 214
+    private let minControlsHeight: CGFloat = 196
 
     var body: some View {
         GeometryReader { geo in
             let gap = model.settings.screenGap.points
-            // Screens fit the width unless the controls would be squeezed. With
-            // a focused layout one screen shrinks, so the base width can grow.
-            let available = geo.size.height - 52 - minControlsHeight - gap - 30
+            // No top bar in-game: a floating back bubble rides the top screen,
+            // so the screens get every point the controls don't need. With a
+            // focused layout one screen shrinks, so the base width can grow.
+            let available = geo.size.height - minControlsHeight - gap - 28
             let maxByHeight = available / model.settings.portraitLayout.totalHeightFactor
-            let screenWidth = max(200, min(geo.size.width - 20, maxByHeight))
+            let screenWidth = max(200, min(geo.size.width - 8, maxByHeight))
             VStack(spacing: 0) {
-                topBar
                 screenBand(width: screenWidth, gap: gap)
                 controlsArea
             }
         }
         .background(theme.bg.ignoresSafeArea())
-    }
-
-    private var topBar: some View {
-        HStack {
-            CircleIconButton(size: 40, action: { model.exitGame() }) {
-                ChevronShape(direction: .left)
-                    .stroke(Palette.text80, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-                    .frame(width: 10, height: 17)
-            }
-            Spacer()
-            Text(model.currentGame?.title ?? "Game")
-                .font(Typography.cardTitle)
-                .tracking(-0.2)
-                .foregroundColor(.white)
-                .lineLimit(1)
-            Spacer()
-            HStack(spacing: 8) {
-                if let label = session.speedBadgeLabel {
-                    FFBadge(label: label)
-                }
-            }
-            .frame(minWidth: 40, alignment: .trailing)
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
     }
 
     private func screenBand(width: CGFloat, gap: CGFloat) -> some View {
@@ -134,10 +108,27 @@ struct PortraitGameView: View {
         .frame(width: width)
         .opacity(unfolded ? 1 : 0.35)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
         .overlay {
             if session.lidClosed {
                 lidOverlay
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            floatingCircle(action: { model.exitGame() }) {
+                ChevronShape(direction: .left)
+                    .stroke(Palette.text80, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                    .frame(width: 9, height: 15)
+            }
+            .padding(.leading, 12)
+            .padding(.top, 12)
+        }
+        .overlay(alignment: .topTrailing) {
+            if let label = session.speedBadgeLabel {
+                FFBadge(label: label)
+                    .padding(.trailing, 14)
+                    .padding(.top, 16)
             }
         }
         .onAppear {
@@ -176,6 +167,23 @@ struct PortraitGameView: View {
         .padding(.vertical, 8)
     }
 
+    /// Translucent round button floating over game pixels (portrait's back
+    /// bubble; matches landscape's corner circles).
+    private func floatingCircle<Icon: View>(action: @escaping () -> Void, @ViewBuilder icon: () -> Icon) -> some View {
+        Button {
+            ButtonHaptics.shared.tap()
+            action()
+        } label: {
+            ZStack {
+                Circle().fill(Color(rgba: 28, 28, 30, 0.8))
+                Circle().stroke(Palette.hairline12, lineWidth: 0.5)
+                icon()
+            }
+            .frame(width: 36, height: 36)
+        }
+        .buttonStyle(ScalePressStyle())
+    }
+
     private var controlsArea: some View {
         GeometryReader { geo in
             TouchControlsView(layout: .portraitDefault,
@@ -186,9 +194,9 @@ struct PortraitGameView: View {
                               onMenu: { model.openSheet(.quickMenu) },
                               onMic: { session.setMicHeld($0) })
         }
-        .padding(.top, 8)
-        .padding(.horizontal, 18)
-        .padding(.bottom, 10)
+        .padding(.top, 6)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 }
 

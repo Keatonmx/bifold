@@ -12,14 +12,14 @@ import SwiftUI
 struct ControlMetrics {
     let isLandscape: Bool
 
-    var shoulder: CGSize { isLandscape ? CGSize(width: 92, height: 32) : CGSize(width: 96, height: 34) }
-    var dpad: CGFloat { isLandscape ? 132 : 142 }
-    var dpadArm: CGFloat { isLandscape ? 45 : 48 }
-    var dpadRadius: CGFloat { isLandscape ? 12 : 13 }
+    var shoulder: CGSize { isLandscape ? CGSize(width: 92, height: 32) : CGSize(width: 96, height: 32) }
+    var dpad: CGFloat { isLandscape ? 132 : 130 }
+    var dpadArm: CGFloat { isLandscape ? 45 : 44 }
+    var dpadRadius: CGFloat { 12 }
     /// Four face buttons, so slightly smaller than a two-button handheld's.
-    var face: CGFloat { isLandscape ? 50 : 54 }
+    var face: CGFloat { isLandscape ? 50 : 52 }
     var blow: CGFloat { 44 }
-    var pill: CGSize { isLandscape ? CGSize(width: 78, height: 30) : CGSize(width: 84, height: 34) }
+    var pill: CGSize { isLandscape ? CGSize(width: 78, height: 30) : CGSize(width: 84, height: 32) }
     var pillFont: CGFloat { isLandscape ? 10 : 11 }
     var faceFont: CGFloat { isLandscape ? 17 : 19 }
     var shoulderFont: CGFloat { isLandscape ? 13 : 14 }
