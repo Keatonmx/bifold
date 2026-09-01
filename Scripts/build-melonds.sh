@@ -71,6 +71,9 @@ target_sources(core PRIVATE
     net/MPInterface.cpp
     net/LocalMP.cpp
     net/LAN.cpp)
+# net/ sources include core headers ("types.h") by bare name; the core's
+# own dir is only an INTERFACE include, so add it PRIVATE too.
+target_include_directories(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 if (BIFOLD_ENET_INCLUDE)
     target_include_directories(core PRIVATE "${BIFOLD_ENET_INCLUDE}")
 endif()
