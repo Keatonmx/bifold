@@ -81,25 +81,28 @@ struct PortraitGameView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let gap = model.settings.screenGap.points
+            let tv = model.tvConnected
+            let gap = tv ? 0 : model.settings.screenGap.points
             let fill = model.settings.screenFit == .fill
             // No top bar in-game: a floating back bubble rides the top screen,
             // so the screens get every point the controls don't need. With a
             // focused layout one screen shrinks, so the base width can grow;
-            // Fill ignores 4:3 and hands the screens all of it.
+            // Fill ignores 4:3 and hands the screens all of it. In TV mode
+            // the top screen lives on the TV and only the touch screen is here.
+            let heightFactor = tv ? 0.75 : model.settings.portraitLayout.totalHeightFactor
             let available = geo.size.height - minControlsHeight - gap - 28
-            let maxByHeight = available / model.settings.portraitLayout.totalHeightFactor
+            let maxByHeight = available / heightFactor
             let screenWidth = fill ? max(200, geo.size.width - 8)
                                    : max(200, min(geo.size.width - 8, maxByHeight))
             VStack(spacing: 0) {
-                screenBand(width: screenWidth, gap: gap, fill: fill, availableHeight: available)
+                screenBand(width: screenWidth, gap: gap, fill: fill, availableHeight: available, tv: tv)
                 controlsArea
             }
         }
         .background(theme.bg.ignoresSafeArea())
     }
 
-    private func screenBand(width: CGFloat, gap: CGFloat, fill: Bool, availableHeight: CGFloat) -> some View {
+    private func screenBand(width: CGFloat, gap: CGFloat, fill: Bool, availableHeight: CGFloat, tv: Bool) -> some View {
         let swap = model.settings.swapScreens
         let layout = model.settings.portraitLayout
         // Which role each display slot shows, and how wide it is (a focused
@@ -111,22 +114,31 @@ struct PortraitGameView: View {
         let f2 = layout.fraction(isTouchScreen: slot2IsTouch)
         let fillHeight = max(100, availableHeight - gap)
         return VStack(spacing: gap) {
-            DSScreenView(store: slot1IsTouch ? session.bottomStore : session.topStore,
-                         filter: model.settings.filter,
-                         isTouchScreen: slot1IsTouch,
-                         fill: fill)
-                .frame(width: fill ? width : width * f1,
-                       height: fill ? fillHeight * f1 / (f1 + f2) : nil)
-                .rotation3DEffect(.degrees(unfolded ? 0 : -68), axis: (x: 1, y: 0, z: 0),
-                                  anchor: .bottom, perspective: 0.5)
-            DSScreenView(store: slot2IsTouch ? session.bottomStore : session.topStore,
-                         filter: model.settings.filter,
-                         isTouchScreen: slot2IsTouch,
-                         fill: fill)
-                .frame(width: fill ? width : width * f2,
-                       height: fill ? fillHeight * f2 / (f1 + f2) : nil)
-                .rotation3DEffect(.degrees(unfolded ? 0 : 68), axis: (x: 1, y: 0, z: 0),
-                                  anchor: .top, perspective: 0.5)
+            if tv {
+                // The TV has the top screen; the phone is all touch surface.
+                DSScreenView(store: session.bottomStore,
+                             filter: model.settings.filter,
+                             isTouchScreen: true,
+                             fill: fill)
+                    .frame(width: width, height: fill ? fillHeight : nil)
+            } else {
+                DSScreenView(store: slot1IsTouch ? session.bottomStore : session.topStore,
+                             filter: model.settings.filter,
+                             isTouchScreen: slot1IsTouch,
+                             fill: fill)
+                    .frame(width: fill ? width : width * f1,
+                           height: fill ? fillHeight * f1 / (f1 + f2) : nil)
+                    .rotation3DEffect(.degrees(unfolded ? 0 : -68), axis: (x: 1, y: 0, z: 0),
+                                      anchor: .bottom, perspective: 0.5)
+                DSScreenView(store: slot2IsTouch ? session.bottomStore : session.topStore,
+                             filter: model.settings.filter,
+                             isTouchScreen: slot2IsTouch,
+                             fill: fill)
+                    .frame(width: fill ? width : width * f2,
+                           height: fill ? fillHeight * f2 / (f1 + f2) : nil)
+                    .rotation3DEffect(.degrees(unfolded ? 0 : 68), axis: (x: 1, y: 0, z: 0),
+                                      anchor: .top, perspective: 0.5)
+            }
         }
         .frame(width: width)
         // Without this the VStack splits height with the greedy controls
@@ -274,15 +286,28 @@ struct LandscapeGameView: View {
     }
 
     var body: some View {
-        let book = model.settings.bookMode
+        let tv = model.tvConnected
         // Book pages: both screens turned the same way; righty reads
         // top-screen-left / touch-right, lefty the mirror. Swap is a
-        // non-book concept, so book mode ignores it.
+        // non-book concept, so book mode ignores it; TV mode ignores both.
+        let book: BookMode = tv ? .off : model.settings.bookMode
         let swap = book == .off ? model.settings.swapScreens : (book == .leftHanded)
         let fill = model.settings.screenFit == .fill
         let rotation = book.rotation
         ZStack(alignment: .topLeading) {
             Color.black
+
+            if tv {
+                // The TV has the top screen; the phone is one big touch surface.
+                DSScreenView(store: session.bottomStore,
+                             filter: model.settings.filter,
+                             isTouchScreen: true,
+                             cornerRadius: 4,
+                             fill: fill)
+                    .frame(width: fill ? size.width : nil,
+                           height: fill ? size.height : nil)
+                    .frame(width: size.width, height: size.height)
+            } else {
 
             // Two screens side by side, centred, as large as the height allows
             // (Fill hands each exactly half the display).
@@ -305,6 +330,8 @@ struct LandscapeGameView: View {
                            height: fill ? size.height : nil)
             }
             .frame(width: size.width, height: size.height)
+
+            }
 
             // Overlay controls at the configured opacity.
             TouchControlsView(layout: .landscapeDefault,

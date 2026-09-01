@@ -35,14 +35,26 @@ struct BifoldApp: App {
     }
 }
 
-/// Only needed to make the orientation mask dynamic: portrait in the library,
-/// portrait + landscape in game.
+/// Makes the orientation mask dynamic (portrait in the library, anything in
+/// game) and routes external displays to the TV-mode scene.
 final class AppDelegate: NSObject, UIApplicationDelegate {
     static var orientationMask: UIInterfaceOrientationMask = .portrait
 
     func application(_ application: UIApplication,
                      supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         AppDelegate.orientationMask
+    }
+
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        if connectingSceneSession.role == .windowExternalDisplayNonInteractive {
+            let config = UISceneConfiguration(name: "TV", sessionRole: connectingSceneSession.role)
+            config.delegateClass = ExternalSceneDelegate.self
+            return config
+        }
+        // The main scene stays SwiftUI's.
+        return UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
     }
 }
 

@@ -357,6 +357,8 @@ final class EmulatorSession: ObservableObject {
         runner.running = true
         audio.start(mixWithOthers: settings.backgroundAudioMixing)
         if settings.realMicEnabled { micMonitor.start() }
+        // Playing with a controller or on a TV may never touch the screen.
+        UIApplication.shared.isIdleTimerDisabled = true
         syncSpeed()
     }
 
@@ -394,6 +396,7 @@ final class EmulatorSession: ObservableObject {
         micMonitor.stop()
         dsiCamera.stop()
         audio.stop()
+        UIApplication.shared.isIdleTimerDisabled = false
         runner.withCore { $0.unloadROM() }
         game = nil
     }

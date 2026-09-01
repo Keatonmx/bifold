@@ -57,6 +57,14 @@ final class AppModel: ObservableObject {
     /// Local wireless: a hosted or joined session outlives the sheet.
     @Published var wirelessInSession = false
     @Published var wirelessHosting = false
+    /// TV mode: an external display is showing the top screen.
+    @Published var tvConnected = false {
+        didSet {
+            guard tvConnected != oldValue else { return }
+            showToast(tvConnected ? "Top screen on the TV · the phone is the touch screen"
+                                  : "TV disconnected")
+        }
+    }
 
     var theme: ThemeTokens { ThemeTokens.tokens(for: settings.theme) }
     var skin: ControllerSkin { ControllerSkin.skin(named: settings.skin) }
@@ -69,6 +77,8 @@ final class AppModel: ObservableObject {
         self.settings = settings
         self.session = EmulatorSession(settings: settings)
         ButtonHaptics.shared.enabled = settings.hapticsEnabled
+        TVLink.model = self
+        TVLink.session = session
         refreshLibrary()
 
         ControllerManager.shared.onMenuPressed = { [weak self] in

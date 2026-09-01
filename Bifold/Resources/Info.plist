@@ -45,10 +45,12 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 
+	<!-- Multiple scenes on for TV mode: external displays get their own
+	     scene showing the top screen. -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
+		<true/>
 	</dict>
 	<key>UILaunchScreen</key>
 	<dict>
