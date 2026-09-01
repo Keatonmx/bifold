@@ -178,6 +178,27 @@ typedef NS_ENUM(NSInteger, DSMicMode) {
 /// write of the current SRAM contents (call before backup/exit).
 - (void)flushSaveData;
 
+#pragma mark - Local wireless
+
+/// One discovered session on the network.
+extern NSString* const DSWirelessSessionName;
+extern NSString* const DSWirelessSessionAddress;
+extern NSString* const DSWirelessSessionPlayers;
+extern NSString* const DSWirelessSessionMaxPlayers;
+
+/// Switches DS local wireless between off (dummy) and the LAN backend.
++ (void)wirelessSetEnabled:(BOOL)enabled;
++ (BOOL)wirelessEnabled;
+/// Browse for sessions on the network (call while the sheet is open).
++ (BOOL)wirelessStartDiscovery;
++ (void)wirelessEndDiscovery;
++ (NSArray<NSDictionary<NSString *, id> *> *)wirelessDiscoveryList;
+/// Host a session; other phones on the Wi-Fi can then join it.
++ (BOOL)wirelessHostWithName:(NSString *)playerName maxPlayers:(NSInteger)maxPlayers;
++ (BOOL)wirelessJoinWithName:(NSString *)playerName hostAddress:(NSString *)address;
++ (void)wirelessEndSession;
++ (NSInteger)wirelessNumPlayers;
+
 #pragma mark - Misc
 
 /// Copies the current top-screen framebuffer into a fresh RGBA8 buffer

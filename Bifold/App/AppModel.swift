@@ -19,6 +19,7 @@ enum ActiveSheet: Equatable, Identifiable {
     case quickMenu
     case saveStates
     case bookmarks
+    case wireless
     case settings
     /// Play / continue / import save / remove for `AppModel.selectedGame`.
     case gameActions
@@ -53,6 +54,9 @@ final class AppModel: ObservableObject {
     @Published var coverVersion = 0
     /// Library search text.
     @Published var searchText = ""
+    /// Local wireless: a hosted or joined session outlives the sheet.
+    @Published var wirelessInSession = false
+    @Published var wirelessHosting = false
 
     var theme: ThemeTokens { ThemeTokens.tokens(for: settings.theme) }
     var skin: ControllerSkin { ControllerSkin.skin(named: settings.skin) }
@@ -141,6 +145,7 @@ final class AppModel: ObservableObject {
                 case "about": self.openSheet(.about)
                 case "gameActions": if let g = self.games.first { self.select(g) }
                 case "quickMenu": self.openSheet(.quickMenu)
+                case "wireless": self.openSheet(.wireless)
                 case "bookmarks":
                     self.session.captureBookmark()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in

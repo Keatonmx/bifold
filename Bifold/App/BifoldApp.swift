@@ -104,6 +104,7 @@ struct RootView: View {
                 case .quickMenu: QuickMenuSheet()
                 case .saveStates: SaveStatesSheet()
                 case .bookmarks: BookmarksSheet()
+                case .wireless: WirelessSheet()
                 case .settings: SettingsSheet()
                 case .gameActions: GameActionsSheet()
                 case .about: AboutSheet()

@@ -12,6 +12,7 @@
 
 #include "Platform.h"
 #include "BifoldCoreState.h"
+#include "net/MPInterface.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -349,17 +350,19 @@ void WriteGBASave(const u8*, u32, u32, u32, void*) {}
 void WriteFirmware(const Firmware&, u32, u32, void*) {}
 void WriteDateTime(int, int, int, int, int, int, void*) {}
 
-// ---------------------------------------------------------------- multiplayer / network (stubs)
+// ---------------------------------------------------------------- multiplayer
+// Forwarded to melonDS's MPInterface: a Dummy until the user hosts or joins
+// a local-wireless session, then the LAN implementation over ENet.
 
-void MP_Begin(void*) {}
-void MP_End(void*) {}
-int MP_SendPacket(u8*, int, u64, void*) { return 0; }
-int MP_RecvPacket(u8*, u64*, void*) { return 0; }
-int MP_SendCmd(u8*, int, u64, void*) { return 0; }
-int MP_SendReply(u8*, int, u64, u16, void*) { return 0; }
-int MP_SendAck(u8*, int, u64, void*) { return 0; }
-int MP_RecvHostPacket(u8*, u64*, void*) { return 0; }
-u16 MP_RecvReplies(u8*, u64, u16, void*) { return 0; }
+void MP_Begin(void*) { MPInterface::Get().Begin(0); }
+void MP_End(void*) { MPInterface::Get().End(0); }
+int MP_SendPacket(u8* data, int len, u64 timestamp, void*) { return MPInterface::Get().SendPacket(0, data, len, timestamp); }
+int MP_RecvPacket(u8* data, u64* timestamp, void*) { return MPInterface::Get().RecvPacket(0, data, timestamp); }
+int MP_SendCmd(u8* data, int len, u64 timestamp, void*) { return MPInterface::Get().SendCmd(0, data, len, timestamp); }
+int MP_SendReply(u8* data, int len, u64 timestamp, u16 aid, void*) { return MPInterface::Get().SendReply(0, data, len, timestamp, aid); }
+int MP_SendAck(u8* data, int len, u64 timestamp, void*) { return MPInterface::Get().SendAck(0, data, len, timestamp); }
+int MP_RecvHostPacket(u8* data, u64* timestamp, void*) { return MPInterface::Get().RecvHostPacket(0, data, timestamp); }
+u16 MP_RecvReplies(u8* data, u64 timestamp, u16 aidmask, void*) { return MPInterface::Get().RecvReplies(0, data, timestamp, aidmask); }
 
 int Net_SendPacket(u8*, int, void*) { return 0; }
 int Net_RecvPacket(u8*, void*) { return 0; }

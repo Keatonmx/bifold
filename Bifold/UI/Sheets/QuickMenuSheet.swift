@@ -70,6 +70,10 @@ struct QuickMenuSheet: View {
             Card {
                 NavRow(title: "All save states", detail: "\(model.gameData.slots.filter(\.isFilled).count) of \(SaveSlot.count) used") { model.openSheet(.saveStates) }
                 NavRow(title: "Bookmarks", detail: bookmarkDetail) { model.openSheet(.bookmarks) }
+                NavRow(title: "Local wireless", subtitle: "Experimental · two phones on one Wi-Fi",
+                       detail: model.wirelessInSession ? (model.wirelessHosting ? "Hosting" : "Joined") : "Off") {
+                    model.openSheet(.wireless)
+                }
                 NavRow(title: "Book mode", subtitle: "Sideways games · hold the phone landscape",
                        detail: model.settings.bookMode.rawValue, showsChevron: false) {
                     model.cycleBookMode()

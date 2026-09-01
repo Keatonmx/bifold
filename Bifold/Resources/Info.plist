@@ -27,6 +27,10 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 
+	<!-- Local wireless: sessions are discovered and played over your Wi-Fi. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Local wireless play finds and connects to other phones running Bifold on your Wi-Fi network. Nothing leaves your network.</string>
+
 	<!-- Only used when a DSi game turns its cameras on (DSi mode). -->
 	<key>NSCameraUsageDescription</key>
 	<string>DSi games with cameras see through the phone's cameras. Frames go straight to the emulated console and are never uploaded or stored.</string>

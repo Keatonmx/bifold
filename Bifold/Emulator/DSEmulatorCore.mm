@@ -24,7 +24,11 @@
 #include "RTC.h"
 #include "Savestate.h"
 #include "Platform.h"
+#include "net/MPInterface.h"
+#include "net/LAN.h"
 #include "version.h"
+
+#include <arpa/inet.h>
 
 #include <algorithm>
 #include <memory>
@@ -361,6 +365,7 @@ static NDSArgs MakeBaseArgs()
 
 - (void)runFrame {
     if (!_nds) return;
+    MPInterface::Get().Process();
     _nds->RunFrame();
     _frameCounter++;
 
@@ -574,6 +579,85 @@ static NDSArgs MakeBaseArgs()
     if (!sram || length == 0) return;
     NSData* data = [NSData dataWithBytes:sram length:length];
     [data writeToFile:[NSString stringWithUTF8String:_state->savePath.c_str()] atomically:YES];
+}
+
+#pragma mark - Local wireless
+
+NSString* const DSWirelessSessionName = @"name";
+NSString* const DSWirelessSessionAddress = @"address";
+NSString* const DSWirelessSessionPlayers = @"players";
+NSString* const DSWirelessSessionMaxPlayers = @"maxPlayers";
+
+/// The LAN backend, when it is the active MPInterface; null otherwise.
+static LAN* ActiveLAN(void)
+{
+    if (MPInterface::GetType() != MPInterface_LAN) return nullptr;
+    return static_cast<LAN*>(&MPInterface::Get());
+}
+
++ (void)wirelessSetEnabled:(BOOL)enabled {
+    if (enabled) {
+        if (MPInterface::GetType() != MPInterface_LAN) {
+            MPInterface::Set(MPInterface_LAN);
+        }
+    } else if (MPInterface::GetType() != MPInterface_Dummy) {
+        if (LAN* lan = ActiveLAN()) lan->EndSession();
+        MPInterface::Set(MPInterface_Dummy);
+    }
+}
+
++ (BOOL)wirelessEnabled {
+    return MPInterface::GetType() == MPInterface_LAN;
+}
+
++ (BOOL)wirelessStartDiscovery {
+    LAN* lan = ActiveLAN();
+    return lan ? lan->StartDiscovery() : NO;
+}
+
++ (void)wirelessEndDiscovery {
+    if (LAN* lan = ActiveLAN()) lan->EndDiscovery();
+}
+
++ (NSArray<NSDictionary<NSString *, id> *> *)wirelessDiscoveryList {
+    LAN* lan = ActiveLAN();
+    if (!lan) return @[];
+    NSMutableArray* sessions = [NSMutableArray array];
+    for (const auto& [address, data] : lan->GetDiscoveryList()) {
+        char name[65] = {0};
+        memcpy(name, data.SessionName, 64);
+        struct in_addr addr = { .s_addr = address };
+        char dotted[INET_ADDRSTRLEN] = {0};
+        inet_ntop(AF_INET, &addr, dotted, sizeof(dotted));
+        [sessions addObject:@{
+            DSWirelessSessionName: [NSString stringWithUTF8String:name] ?: @"Session",
+            DSWirelessSessionAddress: [NSString stringWithUTF8String:dotted] ?: @"",
+            DSWirelessSessionPlayers: @(data.NumPlayers),
+            DSWirelessSessionMaxPlayers: @(data.MaxPlayers),
+        }];
+    }
+    return sessions;
+}
+
++ (BOOL)wirelessHostWithName:(NSString *)playerName maxPlayers:(NSInteger)maxPlayers {
+    LAN* lan = ActiveLAN();
+    if (!lan) return NO;
+    return lan->StartHost(playerName.UTF8String, (int)MAX(2, MIN(16, maxPlayers)));
+}
+
++ (BOOL)wirelessJoinWithName:(NSString *)playerName hostAddress:(NSString *)address {
+    LAN* lan = ActiveLAN();
+    if (!lan) return NO;
+    return lan->StartClient(playerName.UTF8String, address.UTF8String);
+}
+
++ (void)wirelessEndSession {
+    if (LAN* lan = ActiveLAN()) lan->EndSession();
+}
+
++ (NSInteger)wirelessNumPlayers {
+    LAN* lan = ActiveLAN();
+    return lan ? lan->GetNumPlayers() : 0;
 }
 
 #pragma mark - Misc

@@ -28,6 +28,10 @@ MELONDS_REPO="https://github.com/melonDS-emu/melonDS.git"
 # Tag 1.1 (commit b86390e). The bridge was written against this revision.
 # Override with MELONDS_REF=<branch|tag|sha> to build something else.
 MELONDS_REF="${MELONDS_REF:-1.1}"
+# ENet (MIT), for melonDS's LAN local-multiplayer stack.
+ENET_REPO="https://github.com/lsalzman/enet.git"
+ENET_REF="${ENET_REF:-v1.3.18}"
+ENET="$VENDOR/enet"
 IOS_MIN="${IOS_MIN:-16.0}"
 
 if [[ "${1:-}" == "--clean" ]]; then
@@ -48,6 +52,31 @@ if [[ ! -d "$SRC/.git" ]]; then
 fi
 echo "==> melonDS revision: $(git -C "$SRC" rev-parse --short HEAD)"
 
+if [[ ! -d "$ENET/.git" ]]; then
+  echo "==> Cloning ENet ($ENET_REF)"
+  git init -q "$ENET"
+  git -C "$ENET" remote add origin "$ENET_REPO"
+  git -C "$ENET" fetch --depth 1 origin "$ENET_REF"
+  git -C "$ENET" checkout -q FETCH_HEAD
+fi
+
+# Compile melonDS's local-wireless stack (src/net) into the core library.
+# Appended with a marker so re-runs stay idempotent; simpler and sturdier
+# than carrying a context-sensitive patch file.
+if ! grep -q BIFOLD_NET_MARKER "$SRC/src/CMakeLists.txt"; then
+  cat >> "$SRC/src/CMakeLists.txt" <<'EOF'
+
+# BIFOLD_NET_MARKER: compile the LAN multiplayer stack into the core.
+target_sources(core PRIVATE
+    net/MPInterface.cpp
+    net/LocalMP.cpp
+    net/LAN.cpp)
+if (BIFOLD_ENET_INCLUDE)
+    target_include_directories(core PRIVATE "${BIFOLD_ENET_INCLUDE}")
+endif()
+EOF
+fi
+
 # ---------------------------------------------------------------- cmake
 # Core library only: no Qt/SDL frontend, no JIT (iOS forbids executable
 # memory for sideloaded apps), no OpenGL renderer, no GDB stub.
@@ -65,7 +94,38 @@ COMMON_FLAGS=(
   -DENABLE_GDBSTUB=OFF
   -DENABLE_LTO_RELEASE=OFF        # LTO ties the .a to one exact clang; keep archives portable
   -DMELONDS_EMBED_BUILD_INFO=OFF
+  -DBIFOLD_ENET_INCLUDE="$ENET/include"
 )
+
+# ENet is fourteen portable C files; compile them per arch by hand rather
+# than trusting a decade-old CMakeLists to modern CMake.
+build_enet_slice() {   # name sysroot archs(space separated)
+  local name="$1" sysroot="$2"; shift 2
+  local dir="$BUILD/enet-$name"
+  mkdir -p "$dir"
+  local minflag="-miphoneos-version-min=$IOS_MIN"
+  [[ "$sysroot" == "iphonesimulator" ]] && minflag="-mios-simulator-version-min=$IOS_MIN"
+  local thins=()
+  for arch in "$@"; do
+    local objdir="$dir/$arch"
+    mkdir -p "$objdir"
+    for c in "$ENET"/*.c; do
+      [[ "$(basename "$c")" == "win32.c" ]] && continue
+      xcrun clang -c -O2 -arch "$arch" -isysroot "$(xcrun --sdk "$sysroot" --show-sdk-path)" \
+        "$minflag" \
+        -I"$ENET/include" -DHAS_FCNTL=1 -DHAS_POLL=1 -DHAS_GETADDRINFO=1 -DHAS_GETNAMEINFO=1 \
+        -DHAS_INET_PTON=1 -DHAS_INET_NTOP=1 -DHAS_MSGHDR_FLAGS=1 -DHAS_SOCKLEN_T=1 \
+        -o "$objdir/$(basename "${c%.c}").o" "$c"
+    done
+    xcrun libtool -static -o "$dir/libenet-$arch.a" "$objdir"/*.o
+    thins+=("$dir/libenet-$arch.a")
+  done
+  if [[ ${#thins[@]} -gt 1 ]]; then
+    xcrun lipo -create "${thins[@]}" -output "$dir/libenet.a"
+  else
+    cp "${thins[0]}" "$dir/libenet.a"
+  fi
+}
 
 export PKG_CONFIG_LIBDIR=/nonexistent   # never pick up Homebrew libs for an iOS build
 
@@ -78,14 +138,17 @@ build_slice() {   # name sysroot archs
   echo "==> Building $name"
   cmake --build "$dir" --target core 2>&1 | tail -n 3
 
-  # Merge libcore + libteakra (DSi DSP, linked PRIVATE by core) per slice.
+  # Merge libcore + libteakra (DSi DSP) + libenet (LAN multiplayer) per slice.
   local libs=()
   libs+=("$(find "$dir" -name 'libcore*.a' | head -n 1)")
   while IFS= read -r l; do libs+=("$l"); done < <(find "$dir" -name 'libteakra*.a' || true)
+  libs+=("$BUILD/enet-$name/libenet.a")
   echo "    merging: ${libs[*]##*/}"
   xcrun libtool -static -o "$dir/libmelonds-merged.a" "${libs[@]}"
 }
 
+build_enet_slice ios-arm64     iphoneos        arm64
+build_enet_slice ios-simulator iphonesimulator arm64 x86_64
 build_slice ios-arm64          iphoneos        "arm64"
 build_slice ios-simulator      iphonesimulator "arm64;x86_64"
 
@@ -100,6 +163,8 @@ rm -rf "$DIST"; mkdir -p "$DIST/include"
 done)
 # Generated version header (configure_file output, lives in the build tree).
 cp "$BUILD/ios-arm64/src/version.h" "$DIST/include/version.h"
+# ENet headers (LAN.h includes <enet/enet.h>).
+cp -R "$ENET/include/enet" "$DIST/include/enet"
 
 # ---------------------------------------------------------------- xcframework
 xcodebuild -create-xcframework \

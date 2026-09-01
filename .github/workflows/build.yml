@@ -121,6 +121,7 @@ jobs:
             shot 09-quickmenu -bifold-autoplay -bifold-sheet quickMenu
             shot 10-save-states -bifold-autoplay -bifold-sheet saveStates
             SHOT_DELAY=9 shot 10b-bookmarks -bifold-autoplay -bifold-sheet bookmarks
+            shot 10c-wireless -bifold-autoplay -bifold-sheet wireless
             shot 11-swapped -bifold-autoplay -bifold-swap
             shot 11b-touchbig -bifold-autoplay -bifold-touchbig
             shot 11c-fill -bifold-autoplay -bifold-fill -bifold-ffbutton
