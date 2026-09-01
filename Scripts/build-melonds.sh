@@ -136,7 +136,12 @@ build_slice() {   # name sysroot archs
   cmake -S "$SRC" -B "$dir" -G Ninja "${COMMON_FLAGS[@]}" \
         -DCMAKE_OSX_SYSROOT="$sysroot" -DCMAKE_OSX_ARCHITECTURES="$archs" 2>&1 | tail -n 5
   echo "==> Building $name"
-  cmake --build "$dir" --target core 2>&1 | tail -n 3
+  if ! cmake --build "$dir" --target core > "$dir/build.log" 2>&1; then
+    echo "!! core build failed for $name; errors:"
+    grep -E -B 2 -A 8 "error:" "$dir/build.log" | head -n 100
+    exit 1
+  fi
+  tail -n 3 "$dir/build.log"
 
   # Merge libcore + libteakra (DSi DSP) + libenet (LAN multiplayer) per slice.
   local libs=()
